@@ -6,9 +6,21 @@ Página que estima a velocidade dos ônibus das canaletas de Curitiba (Ligeirõe
 
 Os dados da URBS **não trazem velocidade nem o limite da via**. A velocidade é **estimada** pela distância entre dois registros de GPS consecutivos do mesmo veículo dividida pelo tempo. Isso indica *suspeita* de excesso, não é medição de radar. O limite é um valor único (padrão 50 km/h) aplicado a todos os trechos.
 
+## Baixar mais dias (espelho da UFPR)
+
+```bash
+python3 baixar_dias.py --listar                                   # só lista o que existe
+python3 baixar_dias.py --ultimos 7                                # últimos 7 dias
+python3 baixar_dias.py --inicio 2026-03-01 --fim 2026-03-31       # um período
+python3 baixar_dias.py --inicio 2026-01-01 --passo 7              # amostra: 1 dia por semana
+python3 baixar_dias.py --ultimos 14 --processar                   # baixa e já gera a página
+```
+
+Cada dia de veículos pesa cerca de 20 MB, então para o ano inteiro use `--passo`. Arquivos já baixados são pulados. O script usa só a biblioteca padrão do Python e lê a listagem de <http://dadosabertos.c3sl.ufpr.br/curitibaurbs/>; se o servidor mudar de endereço ou organização, use `--base` e `--listar` para conferir.
+
 ## Como usar
 
-1. Baixe os arquivos diários `AAAA_MM_DD_veiculos.json.xz` e `AAAA_MM_DD_linhas.json.xz` do [portal de dados abertos](https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=ca40f13b-ef61-472b-810f-dd705f85fd2e) (arquivos com mais de 1 ano: [espelho da UFPR](http://dadosabertos.c3sl.ufpr.br/curitibaurbs/)) e coloque na pasta do projeto.
+1. Baixe os arquivos diários (com `baixar_dias.py` acima ou à mão) `AAAA_MM_DD_veiculos.json.xz` e `AAAA_MM_DD_linhas.json.xz` do [portal de dados abertos](https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=ca40f13b-ef61-472b-810f-dd705f85fd2e) (arquivos com mais de 1 ano: [espelho da UFPR](http://dadosabertos.c3sl.ufpr.br/curitibaurbs/)) e coloque na pasta do projeto.
 2. Rode:
    ```bash
    python3 processar_ligeirao.py .                      # Ligeirão + Expresso
