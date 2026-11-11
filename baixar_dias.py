@@ -7,7 +7,7 @@ Exemplos:
     python3 baixar_dias.py --ultimos 7                    # últimos 7 dias disponíveis
     python3 baixar_dias.py --inicio 2026-03-01 --fim 2026-03-31
     python3 baixar_dias.py --inicio 2026-01-01 --fim 2026-11-10 --passo 7   # 1 dia por semana
-    python3 baixar_dias.py --ultimos 14 --processar       # baixa e já gera a página
+    python3 baixar_dias.py --ultimos 14 --processar       # baixa, importa no banco e gera a página
 
 Cada dia de veículos tem ~20 MB. Para o ano inteiro use --passo (amostra) ou baixe em partes.
 Só usa a biblioteca padrão do Python. Arquivos já baixados são pulados.
@@ -145,7 +145,7 @@ def main():
     ap.add_argument("--destino", default=".", help="pasta de destino (padrão: atual)")
     ap.add_argument("--base", default=BASE, help="URL do espelho")
     ap.add_argument("--listar", action="store_true", help="só lista os dias encontrados, sem baixar")
-    ap.add_argument("--processar", action="store_true", help="ao final, roda processar_ligeirao.py na pasta de destino")
+    ap.add_argument("--processar", action="store_true", help="ao final, importa no banco (importar_banco.py) e gera a página (processar_ligeirao.py)")
     a = ap.parse_args()
 
     base = a.base if a.base.endswith("/") else a.base + "/"
@@ -185,8 +185,9 @@ def main():
                 print("ERRO:", e)
 
     if a.processar:
-        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processar_ligeirao.py")
-        subprocess.run([sys.executable, script, a.destino], check=True)
+        aqui = os.path.dirname(os.path.abspath(__file__))
+        subprocess.run([sys.executable, os.path.join(aqui, "importar_banco.py"), a.destino], check=True)
+        subprocess.run([sys.executable, os.path.join(aqui, "processar_ligeirao.py")], check=True)
 
 
 if __name__ == "__main__":

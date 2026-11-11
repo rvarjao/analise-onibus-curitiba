@@ -1,115 +1,106 @@
 #!/usr/bin/env python3
 """
-Processa os arquivos diários da URBS (veiculos + linhas) e gera ligeirao.html,
-uma página única com a análise de velocidade estimada dos Ligeirões.
+Lê o banco DuckDB (criado por importar_banco.py) e gera ligeirao.html, a página com a
+velocidade estimada dos ônibus das canaletas.
 
 Uso:
-    python3 processar_ligeirao.py [pasta_com_os_arquivos] [categorias separadas por vírgula]
+    python3 processar_ligeirao.py                                   # Ligeirão + Expresso, todos os dias do banco
+    python3 processar_ligeirao.py --categorias "LIGEIRÃO"           # só Ligeirão
+    python3 processar_ligeirao.py --inicio 2026-03-01 --fim 2026-03-31
 
-Espera arquivos no padrão AAAA_MM_DD_veiculos.json.xz e AAAA_MM_DD_linhas.json.xz.
-Todos os dias encontrados na pasta são somados. Categorias padrão: LIGEIRÃO,EXPRESSO (Expresso = biarticulados
-que circulam pelas canaletas; os dados não distinguem biarticulado de articulado).
-
-IMPORTANTE: os dados da URBS NÃO têm velocidade. Ela é estimada aqui como
+IMPORTANTE: os dados da URBS NÃO têm velocidade. Ela é estimada pela view `trechos` do banco:
 distância (Haversine) / tempo entre duas posições GPS consecutivas do mesmo veículo.
 """
-import glob, json, lzma, math, os, sys, collections, datetime
+import argparse, json, os, sys
 
-pasta = sys.argv[1] if len(sys.argv) > 1 else "."
-categorias = [c.strip().upper() for c in (sys.argv[2] if len(sys.argv) > 2 else "LIGEIRÃO,EXPRESSO").split(",")]
-DT_MIN, DT_MAX = 3, 40      # intervalo aceito entre dois pontos (s)
-V_MAX = 90                  # acima disso é descartado como salto de GPS (km/h)
-V_DETALHE = 40              # só guarda o trecho individual se >= isso (km/h)
+try:
+    import duckdb
+except ImportError:
+    sys.exit("Instale o DuckDB primeiro:  pip install duckdb")
 
-def haversine(lat1, lon1, lat2, lon2):
-    p = math.pi / 180
-    a = math.sin((lat2 - lat1) * p / 2) ** 2 + math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lon2 - lon1) * p / 2) ** 2
-    return 2 * 6371000 * math.asin(math.sqrt(a))
+V_MAX = 90        # acima disso é descartado como salto de GPS (km/h)
+V_DETALHE = 40    # só guarda o trecho individual se >= isso (km/h)
 
-def abrir(caminho):
-    return lzma.open(caminho, "rt", encoding="utf-8")
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--banco", default="onibus.duckdb")
+ap.add_argument("--categorias", default="LIGEIRÃO,EXPRESSO",
+                help="categorias da URBS separadas por vírgula (Expresso = biarticulados; "
+                     "os dados não distinguem biarticulado de articulado)")
+ap.add_argument("--inicio", help="AAAA-MM-DD (dia dos dados)")
+ap.add_argument("--fim", help="AAAA-MM-DD (dia dos dados)")
+a = ap.parse_args()
 
-arqs_vei = sorted(glob.glob(os.path.join(pasta, "*_veiculos.json.xz")))
-if not arqs_vei:
-    sys.exit("Nenhum arquivo *_veiculos.json.xz encontrado em " + pasta)
+if not os.path.exists(a.banco):
+    sys.exit("Banco não encontrado: %s. Rode antes: python3 importar_banco.py" % a.banco)
+con = duckdb.connect(a.banco, read_only=True)
+categorias = [c.strip().upper() for c in a.categorias.split(",")]
 
-# linhas da categoria (usa o arquivo de linhas mais recente)
-arq_lin = sorted(glob.glob(os.path.join(pasta, "*_linhas.json.xz")))[-1]
-todas = json.load(abrir(arq_lin))
+# linhas das categorias, usando o cadastro mais recente
+todas = con.execute("""SELECT cod, nome, upper(categoria) FROM linhas
+                       WHERE dia = (SELECT max(dia) FROM linhas) ORDER BY cod""").fetchall()
+if not todas:
+    sys.exit("Banco sem cadastro de linhas. Importe um arquivo *_linhas.json.xz.")
 linhas = []
 for g, cat in enumerate(categorias):
-    sel = sorted((l for l in todas if l["CATEGORIA_SERVICO"].upper() == cat), key=lambda l: l["COD"])
+    sel = [(cod, nome, g) for cod, nome, c in todas if c == cat]
     if not sel:
         sys.exit("Nenhuma linha na categoria " + cat)
-    for l in sel:
-        l["g"] = g
     linhas += sel
-cod2i = {l["COD"]: i for i, l in enumerate(linhas)}
-print("Linhas:", [(l["COD"], l["NOME"]) for l in linhas])
+cod2i = {l[0]: i for i, l in enumerate(linhas)}
+print("Linhas:", [(l[0], l[1]) for l in linhas])
 
+# filtro comum
+con.execute("CREATE TEMP TABLE alvo(cod VARCHAR, li INTEGER)")
+con.executemany("INSERT INTO alvo VALUES (?, ?)", [(cod, i) for cod, i in cod2i.items()])
+filtro, par = "", []
+if a.inicio:
+    filtro += " AND t.dia >= ?"; par.append(a.inicio)
+if a.fim:
+    filtro += " AND t.dia <= ?"; par.append(a.fim)
+base = ("FROM trechos t JOIN alvo ON alvo.cod = t.cod_linha WHERE true" + filtro)
+
+dias = [str(r[0]) for r in con.execute("SELECT DISTINCT t.dia " + base + " ORDER BY 1", par).fetchall()]
+if not dias:
+    sys.exit("Nenhum trecho encontrado para essas linhas/período.")
+dia2i = {d: i for i, d in enumerate(dias)}
+
+# histograma: linha x hora x faixa de 1 km/h
 hist = [[[0] * V_MAX for _ in range(24)] for _ in linhas]
+for li, h, b, n in con.execute(
+        "SELECT alvo.li, hour(t.dthr)::INT, floor(t.vel_kmh)::INT, count(*) " + base +
+        " AND t.vel_kmh < %d GROUP BY ALL" % V_MAX, par).fetchall():
+    hist[li][h][b] = n
+
 stats = [{"n": 0, "max": 0.0, "descartados": 0} for _ in linhas]
-veic_idx, veic = {}, []          # veic[i] = [nome, linha, total_trechos]
-detalhe, dias = [], []
+for li, n, mx, desc in con.execute(
+        "SELECT alvo.li, count(*) FILTER (WHERE t.vel_kmh < %d), max(t.vel_kmh) FILTER (WHERE t.vel_kmh < %d), "
+        "count(*) FILTER (WHERE t.vel_kmh >= %d) " % (V_MAX, V_MAX, V_MAX) + base + " GROUP BY ALL", par).fetchall():
+    stats[li] = {"n": n, "max": round(mx or 0, 1), "descartados": desc}
 
-for arq in arqs_vei:
-    por_veic = collections.defaultdict(list)
-    datas = collections.Counter()
-    with abrir(arq) as f:
-        for linha in f:
-            if not linha.strip():
-                continue
-            d = json.loads(linha)
-            li = cod2i.get(d["COD_LINHA"])
-            if li is None:
-                continue
-            dia, hora = d["DTHR"].split(" ")
-            datas[dia] += 1
-            dd, mm, aa = map(int, dia.split("/"))
-            h, mi, s = map(int, hora.split(":"))
-            t = datetime.date(aa, mm, dd).toordinal() * 86400 + h * 3600 + mi * 60 + s
-            por_veic[(d["VEIC"], li)].append((t, float(d["LAT"].replace(",", ".")), float(d["LON"].replace(",", "."))))
-    # o nome do arquivo é a data da extração; a data real vem do campo DTHR
-    d0, m0, a0 = datas.most_common(1)[0][0].split("/")
-    rotulo = f"{a0}-{m0}-{d0}"
-    dias.append(rotulo)
-    di = len(dias) - 1
-    for (v, li), pts in por_veic.items():
-        pts = sorted(set(pts))
-        if (v, li) not in veic_idx:
-            veic_idx[(v, li)] = len(veic)
-            veic.append([v, li, 0])
-        vi = veic_idx[(v, li)]
-        for a, b in zip(pts, pts[1:]):
-            dt = b[0] - a[0]
-            if not (DT_MIN <= dt <= DT_MAX):
-                continue
-            vel = haversine(a[1], a[2], b[1], b[2]) / dt * 3.6
-            if vel >= V_MAX:
-                stats[li]["descartados"] += 1
-                continue
-            sod = b[0] % 86400
-            hist[li][sod // 3600][int(vel)] += 1
-            stats[li]["n"] += 1
-            stats[li]["max"] = max(stats[li]["max"], vel)
-            veic[vi][2] += 1
-            if vel >= V_DETALHE:
-                detalhe.append([li, vi, di, sod, round(vel * 10), round(b[1] * 1e5), round(b[2] * 1e5)])
-    print(rotulo, "ok")
+# veículos (nome, linha, total de trechos)
+veic, veic_idx = [], {}
+for v, li, n in con.execute(
+        "SELECT t.veiculo, alvo.li, count(*) " + base + " AND t.vel_kmh < %d GROUP BY ALL ORDER BY 2, 1" % V_MAX, par).fetchall():
+    veic_idx[(v, li)] = len(veic)
+    veic.append([v, li, n])
 
-for s in stats:
-    s["max"] = round(s["max"], 1)
+# trechos individuais rápidos (para mapa e ranking)
+detalhe = []
+for v, li, dia, sod, vel, lat, lon in con.execute(
+        "SELECT t.veiculo, alvo.li, t.dia, date_diff('second', date_trunc('day', t.dthr), t.dthr), t.vel_kmh, t.lat, t.lon " + base +
+        " AND t.vel_kmh >= %d AND t.vel_kmh < %d ORDER BY t.dthr" % (V_DETALHE, V_MAX), par).fetchall():
+    detalhe.append([li, veic_idx[(v, li)], dia2i[str(dia)], sod, round(vel * 10), round(lat * 1e5), round(lon * 1e5)])
 
 dados = {
     "grupos": [{"nome": c.title()} for c in categorias],
-    "dias": dias,
-    "linhas": [{"cod": l["COD"], "nome": " ".join(l["NOME"].title().split()), "g": l["g"]} for l in linhas],
-    "hist": hist, "stats": stats, "veic": veic, "detalhe": detalhe,
-    "params": {"dtMin": DT_MIN, "dtMax": DT_MAX, "vMax": V_MAX, "vDetalhe": V_DETALHE},
+    "linhas": [{"cod": cod, "nome": " ".join(nome.title().split()), "g": g} for cod, nome, g in linhas],
+    "dias": dias, "hist": hist, "stats": stats, "veic": veic, "detalhe": detalhe,
+    "params": {"dtMin": 3, "dtMax": 40, "vMax": V_MAX, "vDetalhe": V_DETALHE},
 }
 
 aqui = os.path.dirname(os.path.abspath(__file__))
 modelo = open(os.path.join(aqui, "modelo_ligeirao.html"), encoding="utf-8").read()
 saida = os.path.join(aqui, "ligeirao.html")
-open(saida, "w", encoding="utf-8").write(modelo.replace("/*__DADOS__*/null", json.dumps(dados, ensure_ascii=False, separators=(",", ":"))))
-print("Gerado", saida, "-", len(detalhe), "trechos >=", V_DETALHE, "km/h")
+open(saida, "w", encoding="utf-8").write(
+    modelo.replace("/*__DADOS__*/null", json.dumps(dados, ensure_ascii=False, separators=(",", ":"))))
+print("Gerado", saida, "-", len(dias), "dia(s),", sum(s["n"] for s in stats), "trechos,", len(detalhe), "trechos >=", V_DETALHE, "km/h")

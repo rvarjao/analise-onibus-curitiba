@@ -1,3 +1,7 @@
-# arquivos descompactados (muito grandes); os .json.xz ficam versionados
+# banco de dados e arquivos descompactados (grandes)
+*.duckdb
+*.duckdb.wal
 *.json
 dados/
+# novos arquivos baixados da URBS (os já versionados continuam no repositório)
+*.json.xz

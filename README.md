@@ -6,34 +6,62 @@ Página que estima a velocidade dos ônibus das canaletas de Curitiba (Ligeirõe
 
 Os dados da URBS **não trazem velocidade nem o limite da via**. A velocidade é **estimada** pela distância entre dois registros de GPS consecutivos do mesmo veículo dividida pelo tempo. Isso indica *suspeita* de excesso, não é medição de radar. O limite é um valor único (padrão 50 km/h) aplicado a todos os trechos.
 
-## Baixar mais dias (espelho da UFPR)
+## Fluxo
+
+```
+baixar_dias.py  ->  importar_banco.py  ->  onibus.duckdb  ->  processar_ligeirao.py  ->  ligeirao.html
+(espelho UFPR)      (*.json.xz p/ banco)    (todas as linhas)    (consulta e gera a página)
+```
+
+Instale a dependência uma vez: `pip install duckdb`.
+
+### 1. Baixar dias (espelho da UFPR)
 
 ```bash
 python3 baixar_dias.py --listar                                   # só lista o que existe
 python3 baixar_dias.py --ultimos 7                                # últimos 7 dias
 python3 baixar_dias.py --inicio 2026-03-01 --fim 2026-03-31       # um período
 python3 baixar_dias.py --inicio 2026-01-01 --passo 7              # amostra: 1 dia por semana
-python3 baixar_dias.py --ultimos 14 --processar                   # baixa e já gera a página
+python3 baixar_dias.py --ultimos 14 --processar                   # baixa, importa e gera a página
 ```
 
-Cada dia de veículos pesa cerca de 20 MB, então para o ano inteiro use `--passo`. Os `.json.xz` ficam versionados neste repositório (hoje só o dia 10/11/2026); cuidado ao commitar muitos dias, pois o repositório cresce ~20 MB por dia. Arquivos já baixados são pulados. O script usa só a biblioteca padrão do Python e lê a listagem de <http://dadosabertos.c3sl.ufpr.br/curitibaurbs/>; se o servidor mudar de endereço ou organização, use `--base` e `--listar` para conferir.
+Cada dia de veículos pesa cerca de 20 MB. Arquivos já baixados são pulados. O script lê a listagem de <http://dadosabertos.c3sl.ufpr.br/curitibaurbs/>; se o servidor mudar, use `--base` e `--listar` para conferir. Os arquivos também podem ser baixados à mão do [portal de dados abertos](https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=ca40f13b-ef61-472b-810f-dd705f85fd2e) (`AAAA_MM_DD_veiculos.json.xz` e `AAAA_MM_DD_linhas.json.xz`).
 
-## Como usar
+### 2. Importar no banco
 
-1. Baixe os arquivos diários (com `baixar_dias.py` acima ou à mão) `AAAA_MM_DD_veiculos.json.xz` e `AAAA_MM_DD_linhas.json.xz` do [portal de dados abertos](https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=ca40f13b-ef61-472b-810f-dd705f85fd2e) (arquivos com mais de 1 ano: [espelho da UFPR](http://dadosabertos.c3sl.ufpr.br/curitibaurbs/)) e coloque na pasta do projeto.
-2. Rode:
-   ```bash
-   python3 processar_ligeirao.py .                      # Ligeirão + Expresso
-   python3 processar_ligeirao.py . "LIGEIRÃO"           # só Ligeirão
-   ```
-3. Abra `ligeirao.html` no navegador (precisa de internet para os gráficos e o mapa).
+```bash
+python3 importar_banco.py            # importa o que ainda não foi importado para onibus.duckdb
+python3 importar_banco.py --resumo   # mostra o que há no banco
+```
 
-Todos os dias encontrados na pasta são somados. O script gera `ligeirao.html` a partir de `modelo_ligeirao.html`.
+Guarda **todas as posições de todas as linhas** (cerca de 30 MB por dia no banco). Reimportar um arquivo substitui os registros dele. Tabelas: `posicoes`, `linhas`, `arquivos_importados`; a view `trechos` calcula a velocidade estimada por consulta. Exemplo:
+
+```sql
+-- velocidade média e máxima por linha (descartando saltos de GPS)
+SELECT cod_linha, count(*) n, round(avg(vel_kmh),1) media, round(max(vel_kmh),1) maxima
+FROM trechos WHERE vel_kmh < 90 GROUP BY 1 ORDER BY 3 DESC;
+```
+
+O `onibus.duckdb` **não é versionado** (veja `.gitignore`): ele pode chegar a vários GB. Para recriá-lo, baixe os dias de novo e importe.
+
+### 3. Gerar a página
+
+```bash
+python3 processar_ligeirao.py                                    # Ligeirão + Expresso, todos os dias do banco
+python3 processar_ligeirao.py --categorias "LIGEIRÃO"            # só Ligeirão
+python3 processar_ligeirao.py --inicio 2026-03-01 --fim 2026-03-31
+```
+
+Abra `ligeirao.html` no navegador (precisa de internet para os gráficos e o mapa).
 
 ## Grupos
 
 - **Ligeirão**: linhas 250, 500 e 550.
 - **Expresso**: categoria da URBS com as linhas biarticuladas das canaletas (ex.: 203 Sta. Cândida / C. Raso), mais reforços e especiais (códigos X). Os dados não distinguem biarticulado de articulado.
+
+## Dados no repositório
+
+Os `.json.xz` de 10/11/2026 (dia dos dados; extração em 11/11) ficam versionados como exemplo e para reproduzir a página. Arquivos novos baixados são ignorados pelo Git.
 
 ## Licença dos dados
 
