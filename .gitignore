@@ -1,3 +1,3 @@
-*.json.xz
+# arquivos descompactados (muito grandes); os .json.xz ficam versionados
 *.json
 dados/

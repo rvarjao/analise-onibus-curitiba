@@ -16,7 +16,7 @@ python3 baixar_dias.py --inicio 2026-01-01 --passo 7              # amostra: 1 d
 python3 baixar_dias.py --ultimos 14 --processar                   # baixa e já gera a página
 ```
 
-Cada dia de veículos pesa cerca de 20 MB, então para o ano inteiro use `--passo`. Arquivos já baixados são pulados. O script usa só a biblioteca padrão do Python e lê a listagem de <http://dadosabertos.c3sl.ufpr.br/curitibaurbs/>; se o servidor mudar de endereço ou organização, use `--base` e `--listar` para conferir.
+Cada dia de veículos pesa cerca de 20 MB, então para o ano inteiro use `--passo`. Os `.json.xz` ficam versionados neste repositório (hoje só o dia 10/11/2026); cuidado ao commitar muitos dias, pois o repositório cresce ~20 MB por dia. Arquivos já baixados são pulados. O script usa só a biblioteca padrão do Python e lê a listagem de <http://dadosabertos.c3sl.ufpr.br/curitibaurbs/>; se o servidor mudar de endereço ou organização, use `--base` e `--listar` para conferir.
 
 ## Como usar
 
