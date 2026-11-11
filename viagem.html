@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Registrar viagem</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f3f0; --card: #fcfcfb; --border: #dddcd6;
+    --text: #0b0b0b; --text-2: #52514e; --text-3: #77766f;
+    --accent: #2a78d6; --accent-ink: #ffffff;
+    --ok: #1a7f56; --warn: #b26a00; --bad: #c2362f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #121211; --card: #1a1a19; --border: #333230;
+      --text: #f0efec; --text-2: #c3c2b7; --text-3: #9a998f;
+      --accent: #3987e5; --accent-ink: #0b0b0b;
+      --ok: #3fbf8a; --warn: #e0a23a; --bad: #e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  main { max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--text-2); font-size: .9rem; margin: 0 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; font-size: .85rem; color: var(--text-2); margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  button { font: inherit; font-weight: 600; width: 100%; padding: 14px; border-radius: 12px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); margin-top: 12px; }
+  button.sec { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.bad { background: var(--bad); color: #fff; }
+  button:disabled { opacity: .5; }
+  .aviso { font-size: .85rem; color: var(--text-2); }
+  .aviso b { color: var(--text); }
+  .vel { text-align: center; padding: 8px 0 4px; }
+  .vel .n { font-size: 5rem; font-weight: 700; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .vel .u { color: var(--text-2); font-size: 1rem; }
+  .vel .calc { color: var(--text-3); font-size: .8rem; min-height: 1.2em; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .grid div { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+  .grid .k { font-size: .75rem; color: var(--text-3); }
+  .grid .v { font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .status { font-size: .9rem; margin-top: 10px; text-align: center; }
+  .status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.bad { color: var(--bad); }
+  .banner { border: 1px solid var(--warn); background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: .9rem; }
+  .marcas { font-size: .85rem; color: var(--text-2); margin-top: 8px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Registrar viagem</h1>
+  <p class="sub">Grava sua posição e a velocidade medida pelo GPS do celular para comparar com os dados da URBS. Os dados ficam só neste aparelho até você salvar o arquivo.</p>
+
+  <div class="banner" id="recuperar" hidden>
+    Há uma viagem não finalizada neste aparelho (<span id="recInfo"></span>).
+    <button class="sec" id="btnRecuperar">Recuperar e finalizar</button>
+    <button class="sec" id="btnDescartar">Descartar</button>
+  </div>
+
+  <!-- Tela 1: preparar -->
+  <section id="telaPrep">
+    <div class="card">
+      <label for="linha">Linha</label>
+      <input id="linha" list="listaLinhas" placeholder="Digite o código ou o nome (ex.: 203)" autocomplete="off" inputmode="search">
+      <datalist id="listaLinhas"></datalist>
+      <label for="veiculo">Código do veículo (se estiver visível no ônibus)</label>
+      <input id="veiculo" placeholder="Ex.: BE602" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <label for="obs">Observação (opcional)</label>
+      <input id="obs" placeholder="Ex.: sentido centro, chuva">
+      <button id="btnIniciar">Iniciar viagem</button>
+    </div>
+    <div class="card aviso">
+      <b>Só para passageiros.</b> Nunca use enquanto dirige.<br><br>
+      Mantenha esta tela <b>ligada e aberta</b> durante a viagem: se a tela apagar ou você trocar de aplicativo, o navegador pode parar o GPS. Ao iniciar, o navegador vai pedir permissão de localização.
+    </div>
+  </section>
+
+  <!-- Tela 2: gravando -->
+  <section id="telaRec" hidden>
+    <div class="card">
+      <div class="vel"><div class="n" id="vel">--</div><div class="u">km/h (GPS do celular)</div><div class="calc" id="velCalc"></div></div>
+      <div class="status" id="status">Aguardando sinal de GPS…</div>
+      <div class="grid">
+        <div><div class="k">Tempo</div><div class="v" id="tempo">00:00</div></div>
+        <div><div class="k">Pontos gravados</div><div class="v" id="pontos">0</div></div>
+        <div><div class="k">Precisão</div><div class="v" id="prec">--</div></div>
+        <div><div class="k">Máxima</div><div class="v" id="vmax">--</div></div>
+      </div>
+      <button class="sec" id="btnMarcar">Marcar momento</button>
+      <div class="marcas" id="marcas"></div>
+      <button class="bad" id="btnParar">Encerrar viagem</button>
+    </div>
+    <div class="card aviso" id="avisoTela">Tela ligada: <span id="wl">verificando…</span></div>
+  </section>
+
+  <!-- Tela 3: resumo -->
+  <section id="telaFim" hidden>
+    <div class="card">
+      <h1 style="font-size:1.1rem">Viagem finalizada</h1>
+      <div class="grid" id="resumo"></div>
+      <button id="btnBaixar">Baixar arquivo</button>
+      <button class="sec" id="btnCompartilhar" hidden>Compartilhar / enviar</button>
+      <p class="aviso" style="margin-top:12px">Leve o arquivo <b>.json</b> para o computador e rode <code>comparar_viagem.py</code>. A comparação só funciona depois que o dia da viagem for importado no banco (os dados da URBS chegam com um dia de atraso).</p>
+      <button class="sec" id="btnNova">Nova viagem</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const LINHAS = [["010","INTERBAIRROS I (HORÁRIO)"],["011","INTERBAIRROS I (ANTI-HORÁRIO)"],["020","INTERBAIRROS II (HORÁRIO)"],["021","INTERBAIRROS II (ANTI-HORÁRIO)"],["022","INTER 2 (HORÁRIO)"],["023","INTER 2 ( ANTI-HORÁRIO)"],["024","C. RASO / CAMP. SIQUEIRA"],["027","C. RASO / C. DO SIQUEIRA"],["030","INTERBAIRROS III"],["040","INTERBAIRROS IV"],["050","INTERBAIRROS V"],["060","INTERBAIRROS VI"],["150","C. MÚSICA / V. ALEGRE"],["160","JD. MERCÊS / GUANABARA"],["164","R.PRADO/C.GOMES"],["166","V. NORI"],["168","RAPOSO TAVARES"],["169","JD. KOSMOS"],["170","BRACATINGA"],["171","PRIMAVERA"],["175","BOM RETIRO / PUC"],["176","PARQUE TANGUÁ"],["177","CABRAL / PQ.TANGUÁ"],["181","MATEUS LEME"],["182","ABRANCHES"],["183","JD. CHAPARRAL"],["184","V. SUIÇA"],["188","MAD. PILARZINHO / UBERABA"],["189","MAD. ABRANCHES"],["203","STA. CÂNDIDA / C. RASO"],["205","BARREIRINHA"],["206","BARREIRINHA / SÃO JOSÉ"],["207","CABRAL / OSÓRIO"],["209","MAD. S. CÂNDIDA / C. RASO"],["210","CIC/CABRAL"],["211","COLINA VERDE"],["212","SOLAR"],["213","SÃO JOÃO"],["214","TINGUI"],["216","CABRAL / PORTÃO"],["220","CABRAL/HAUER"],["222","V. ESPERANÇA"],["224","CASSIOPÉIA"],["225","BOA VISTA / BARREIRINHA"],["226","ABAETÉ"],["229","MAD. PENHA / F. NORONHA"],["231","BANESTADO / CALIFÓRNIA"],["232","ALIANÇA"],["233","OLARIA"],["236","SÃO BENEDITO"],["237","PARQUE ATUBA"],["238","ATUBA/STA.CANDIDA"],["242","V. LEONICE"],["243","STA. TEREZINHA"],["244","JD. DO ARROIO"],["245","ANITA GARIBALDI"],["247","HOSP. VETERINÁRIO"],["250","LIGEIRÃO NORTE / SUL"],["260","MAL. HERMES / STA. EFIGÊNIA"],["265","AHÚ / LOS ANGELES"],["266","ESTRIBO AHÚ"],["272","PAINEIRAS"],["274","STA. GEMA"],["275","F. NORONHA / LARANJEIRAS"],["280","NSA.SRA.DE NAZARÉ"],["302","CENTENÁRIO / RUI BARBOSA"],["303","CENTENÁRIO / C. COMPRIDO"],["304","PINHAIS / C. COMPRIDO"],["305","CENTENÁRIO"],["307","B. ALTO / STA. FELICIDADE"],["308","MAD. CENTENÁRIO / RUI BARBOSA"],["309","MAD. CENTENÁRIO"],["311","ARAGUAIA"],["321","TRINDADE"],["322","CAMARGO"],["323","V. AUTÓDROMO"],["331","MERCÚRIO"],["332","ACRÓPOLE"],["334","AGRÍCOLA"],["335","CENTENÁRIO / BOQUEIRÃO"],["336","V. RENO"],["338","CENTENÁRIO / HAUER"],["342","B. ALTO / BOA VISTA"],["343","PARAÍSO"],["345","B. ALTO / ATUBA"],["350","ATUBA / PINHEIRINHO"],["360","NOVENA"],["361","AUGUSTO STRESSER"],["365","JD. SOCIAL / BATEL"],["366","ITUPAVA / HOSP. MILITAR"],["371","HIGIENÓPOLIS"],["372","TARUMÃ"],["373","ALTO TARUMÃ"],["374","HUGO LANGE"],["375","SAGRADO CORAÇÃO"],["380","DETRAN / VIC. MACHADO"],["385","CRISTO REI"],["386","CAJURU"],["387","PALOTINOS"],["389","MAD. TARUMÃ / AUGUSTA"],["461","STA. BARBARA"],["462","PETRÓPOLIS"],["463","SOLITUDE"],["464","A. MUNHOZ / JD. BOTÂNICO"],["465","ERASTO GAERTNER"],["466","ESTUDANTES"],["468","JD. CENTAURO"],["469","CENTRO POLITÉCNICO"],["471","V. SÃO PAULO"],["472","UBERABA"],["474","JD. ITIBERÊ"],["475","CANAL BELÉM"],["477","V. MACEDO VIA GUABIROTUBA"],["489","MAD. PETRÓPOLIS / SOLITUDE"],["500","LIGEIRÃO BOQUEIRÃO"],["502","CIRCULAR SUL (HORÁRIO)"],["503","BOQUEIRÃO"],["505","BOQUEIRÃO / C. CÍVICO"],["506","BAIRRO NOVO"],["507","SÍTIO CERCADO (HORÁRIO)"],["508","SÍTIO CERCADO (ANTI-HORÁRIO)"],["509","MAD. BOQUEIRÃO"],["513","HAUER / BOQUEIRÃO"],["515","IGUAPE II"],["516","C. BELEM / S. FILHO"],["519","MAD. S. FRANCISCO / IGUAPE"],["520","OSTERNACK / S. CERCADO L.D."],["521","NIVALDO BRAGA"],["522","MARINGÁ"],["523","IGUAPE I"],["524","BAIRRO NOVO B/C"],["525","HAUER / C.RASO"],["526","ITAMARATI / V. SÃO PEDRO"],["528","BOQUEIRÃO/PINHEIRINHO"],["529","PARQUE NÁUTICO"],["531","STA. INÊS"],["532","JD.PARANAENSE"],["533","E. VERÍSSIMO / PANTANAL"],["534","PARIGOT DE SOUZA"],["535","OSTERNACK / BOQUEIRÃO"],["536","ZOOLÓGICO"],["541","BAIRRO NOVO A"],["542","BAIRRO NOVO B"],["545","TRABALHADOR"],["547","BAIRRO NOVO C"],["548","OSTERNACK / S. CERCADO"],["549","MAD. BAIRRO NOVO"],["550","LIGEIRÃO PINHEIRINHO / C. GOMES"],["552","SAMBAQUI"],["553","MORADIAS PQ. IGUAÇU"],["560","ALFERES POLI"],["561","GUILHERMINA"],["600","TEQUALY/QUARTEL GENERAL"],["602","CIRCULAR SUL (ANTI-HORÁRIO)"],["603","PINHEIRINHO/RUI BARBOSA"],["607","COLOMBO / CIC"],["609","MAD. CIC"],["610","S. CERCADO / C. RASO"],["611","FAZENDINHA / PORTÃO"],["612","PORTÃO / CIC"],["614","FAZENDINHA / PUC"],["615","UBERLÂNDIA"],["616","PORTAO / STA.BERNADETHE"],["617","JD. LUDOVICA"],["619","STA. RITA / CIC"],["620","STA. CRUZ"],["621","FANNY"],["622","RONDON"],["623","PARQUE INDUSTRIAL"],["625","GRAMADOS"],["627","BOSCH"],["628","CARBOMAFRA"],["629","ALTO BOQUEIRÃO"],["630","VITÓRIA RÉGIA"],["631","PIRATINI / BR-476"],["632","QUARTEL GENERAL"],["633","MARIA ANGÉLICA"],["635","LONDRINA"],["636","RIO NEGRO"],["637","STA. JOANA"],["638","PINHEIRINHO"],["639","FUTURAMA"],["640","PALMEIRA"],["641","LUIZ NICHELE"],["642","GANCHINHO"],["643","UMBARÁ"],["644","PINHEIRINHO / CIC"],["646","POMPEIA/JANAINA"],["649","PIRINEUS"],["650","STA. RITA / PINHEIRINHO"],["652","V. VERDE"],["653","SABARÁ"],["654","CAMPO ALEGRE"],["655","JD. DA ORDEM"],["658","C. RASO / CAIUÁ"],["659","CAXIMBA / OLARIA"],["661","LINDÓIA"],["662","DOM ÁTICO"],["663","V. CUBAS"],["665","V. REX"],["666","NOVO MUNDO"],["670","SÃO JORGE"],["671","PORTÃO"],["673","FORMOSA"],["674","NSA. SRA. DA LUZ"],["679","MAD. TATUQUARA"],["680","RURBANA"],["681","DALAGASSA"],["683","FUTURAMA / S. CERCADO"],["684","RIO BONITO"],["685","RIO BONITO / CIC"],["689","MAD. S. PEDRO / R. NEGRO"],["690","V. JULIANA"],["700","PINHEIRINHO/CABRAL"],["701","FAZENDINHA"],["702","CAIUA/CACHOEIRA"],["703","CAIUÁ"],["706","CAIUA/FAZ/CENTRO"],["707","TATUQUARA / CENTRO"],["708","TATUQUARA / S. CERCADO"],["709","V. TIRADENTES / CIC"],["710","STA.AMELIA/P.BELO"],["711","ITATIAIA"],["712","JD. INDEPENDÊNCIA / CIC"],["713","STA. AMÉLIA"],["718","PORTO BELO"],["720","FAZENDINHA / C. COMPRIDO"],["721","MÁRIO JORGE"],["722","COMPLEXO INDUSTRIAL"],["723","EMÍLIO ROMANI"],["724","FAZENDINHA/CAIUÁ-B.VISTA"],["725","BATEL / MOSSUNGUÊ"],["760","STA. QUITÉRIA"],["761","V. IZABEL"],["762","V. ROSINHA"],["772","TUPY/JULIANA"],["773","VIZINHANÇA/STA. RITA"],["777","V. VELHA"],["778","COTOLENGO"],["779","V. VELHA/BURITI"],["788","MAD. V. VELHA"],["789","MAD. CAIUÁ"],["794","PQ. LAGO AZUL"],["801","CAMP. SIQUEIRA / BATEL"],["809","MAD. CAMPO COMPRIDO"],["812","MONTANA"],["814","MOSSUNGUÊ"],["815","REFORÇO TUIUTI"],["816","CAMP. SIQUEIRA / STA.FELICIDADE"],["817","SATURNO / VENEZA"],["820","AUGUSTA/V. MARQUETO"],["821","FERNÃO DIAS"],["822","GABINETO"],["823","AUGUSTA"],["825","V. MARQUETO"],["826","C. COMPRIDO / CIC"],["827","RIVIERA"],["828","C. COMPRIDO / C. RASO"],["829","UNIV.POSITIVO"],["831","FAZENDINHA / C.RASO"],["832","POSIVILLE / INC"],["860","V. SANDRA"],["861","TRAMONTINA"],["862","BARIGUI"],["863","ÁGUA VERDE"],["864","TEQUALY"],["865","JD. ESPLANADA"],["870","SÃO BRAZ"],["875","BIGORRILHO"],["876","SAVÓIA"],["889","MAD. SÃO BRÁZ"],["901","STA. FELICIDADE"],["902","STA. FELICIDADE / PCA.TIRADENTES"],["911","PASSAÚNA"],["912","JOSÉ CULPI"],["913","BUTIATUVINHA"],["915","OURO VERDE (VIA VL.BÁDIA)"],["916","PINHEIROS"],["917","JD. IPÊ"],["924","STA. FELICIDADE / STA. CÂNDIDA"],["928","PASSAÚNA / JD.IPÊ"],["948","BUTIATUVINHA/ OURO VERDE"],["958","PINHEIROS / JOSÉ CULPI"],["965","SÃO BERNARDO"],["967","JÚLIO GRAF"],["972","JD. ITÁLIA"],["979","TURISMO"],["989","MAD. STA. FELICIDADE"],["X02","REFORÇO TUBO BARIGUI"],["X08","REFORÇO PINHEIRINHO"],["X11","SITIO CERCADO / C. RASO"],["X12","ESPECIAL BOQUEIRAO"],["X14","REFORÇO HAUER"],["X20","PORTAO/SITIO CERCADO"],["X36","REF. GUADALUPE / FAZENDINHA"],["X37","STA. RITA / PINH. (SEMI DIRETO)"],["X38","RIO BONITO (SEMI-DIRETO)"],["X41","REFORÇO SABARÁ"],["X43","BRF / COPEL"],["X45","ESPECIAL B.ALTO / C.IMBUIA"],["X47","ESPECIAL PINHEIRINHO"],["X48","ESP. EUFRÁSIO / RUI BARBOSA"],["X49","REFORÇO PORTÃO / CABRAL"],["X55","REFORÇO CIC / AV. J.K."]];
+const $ = id => document.getElementById(id);
+const CHAVE = "viagem_em_andamento";
+const fmt = (n, d = 0) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+let viagem = null, watchId = null, wakeLock = null, timerUI = null, timerSave = null, ultimo = null, vmax = 0;
+
+// ---------- linhas ----------
+const dl = $("listaLinhas");
+LINHAS.forEach(([cod, nome]) => { const o = document.createElement("option"); o.value = cod + " — " + nome; dl.appendChild(o); });
+function codigoDaLinha(txt) { const m = txt.trim().match(/^([0-9A-Za-z]{2,4})(\s|—|-|$)/); return m ? m[1].toUpperCase() : txt.trim(); }
+
+// ---------- utilidades ----------
+function hav(a, b, c, d) { const p = Math.PI / 180, x = Math.sin((c - a) * p / 2) ** 2 + Math.cos(a * p) * Math.cos(c * p) * Math.sin((d - b) * p / 2) ** 2; return 2 * 6371000 * Math.asin(Math.sqrt(x)); }
+const mmss = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0"); };
+function salvarLocal() { try { if (viagem) localStorage.setItem(CHAVE, JSON.stringify(viagem)); } catch (e) {} }
+function lerLocal() { try { const s = localStorage.getItem(CHAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function limparLocal() { try { localStorage.removeItem(CHAVE); } catch (e) {} }
+function tela(n) { $("telaPrep").hidden = n !== "prep"; $("telaRec").hidden = n !== "rec"; $("telaFim").hidden = n !== "fim"; }
+function status(txt, cls) { const s = $("status"); s.textContent = txt; s.className = "status " + (cls || ""); }
+
+// ---------- gravação ----------
+async function pegarTela() {
+  try {
+    if ("wakeLock" in navigator) { wakeLock = await navigator.wakeLock.request("screen"); $("wl").textContent = "ativo"; wakeLock.addEventListener("release", () => { $("wl").textContent = "liberado"; }); }
+    else $("wl").textContent = "não suportado: desative o bloqueio automático nas configurações do celular";
+  } catch (e) { $("wl").textContent = "indisponível (" + (e.name || "erro") + ")"; }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && watchId !== null) pegarTela(); });
+
+function iniciar() {
+  if (!("geolocation" in navigator)) { alert("Este navegador não tem geolocalização."); return; }
+  const cod = codigoDaLinha($("linha").value);
+  if (!cod) { $("linha").focus(); return; }
+  const conhecida = LINHAS.find(l => l[0] === cod);
+  viagem = { versao: 1, linha: cod, nome_linha: conhecida ? conhecida[1] : null,
+    veiculo: $("veiculo").value.trim().toUpperCase() || null, obs: $("obs").value.trim() || null,
+    inicio_ms: Date.now(), fim_ms: null, fuso_min: new Date().getTimezoneOffset(),
+    amostras_colunas: ["t_ms", "lat", "lon", "precisao_m", "vel_ms", "rumo"], amostras: [], marcas: [] };
+  ultimo = null; vmax = 0; $("vel").textContent = "--"; $("velCalc").textContent = ""; $("marcas").textContent = "";
+  tela("rec"); status("Aguardando sinal de GPS…", "warn");
+  pegarTela();
+  watchId = navigator.geolocation.watchPosition(aoPosicao, aoErro, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  timerUI = setInterval(atualizarUI, 500);
+  timerSave = setInterval(salvarLocal, 10000);
+  salvarLocal();
+}
+
+function aoPosicao(p) {
+  const c = p.coords, t = p.timestamp;
+  if (ultimo && t <= ultimo.t) return;                       // ignora repetidos
+  const vel_ms = (c.speed !== null && !isNaN(c.speed)) ? c.speed : null;
+  viagem.amostras.push([t, +c.latitude.toFixed(6), +c.longitude.toFixed(6), c.accuracy !== null ? +c.accuracy.toFixed(1) : null,
+    vel_ms !== null ? +vel_ms.toFixed(2) : null, (c.heading !== null && !isNaN(c.heading)) ? Math.round(c.heading) : null]);
+  let v = vel_ms, calc = false;
+  if (v === null && ultimo) { const dt = (t - ultimo.t) / 1000; if (dt > 0) { v = hav(ultimo.lat, ultimo.lon, c.latitude, c.longitude) / dt; calc = true; } }
+  ultimo = { t, lat: c.latitude, lon: c.longitude, acc: c.accuracy, v, calc };
+  if (v !== null && (c.accuracy === null || c.accuracy <= 50)) vmax = Math.max(vmax, v * 3.6);
+  $("pontos").textContent = viagem.amostras.length;
+  const a = c.accuracy;
+  status(a <= 20 ? "GPS bom" : a <= 50 ? "GPS razoável" : "GPS fraco (precisão baixa)", a <= 20 ? "ok" : a <= 50 ? "warn" : "bad");
+}
+function aoErro(e) {
+  if (e.code === 1) status("Permissão de localização negada. Libere nas configurações do navegador.", "bad");
+  else if (e.code === 2) status("Posição indisponível. Procure céu aberto/janela.", "warn");
+  else status("Sem sinal de GPS há um tempo…", "warn");
+}
+function atualizarUI() {
+  if (!viagem) return;
+  $("tempo").textContent = mmss((Date.now() - viagem.inicio_ms) / 1000);
+  if (ultimo) {
+    const idade = (Date.now() - ultimo.t) / 1000;
+    $("vel").textContent = ultimo.v !== null && idade < 5 ? fmt(ultimo.v * 3.6) : "--";
+    $("velCalc").textContent = ultimo.calc && idade < 5 ? "calculada pela posição (o aparelho não informou velocidade)" : "";
+    $("prec").textContent = ultimo.acc !== null ? fmt(ultimo.acc) + " m" : "--";
+    if (idade >= 10) status("Sem atualização de GPS há " + Math.round(idade) + " s", "warn");
+  }
+  $("vmax").textContent = vmax ? fmt(vmax) + " km/h" : "--";
+}
+function marcar() {
+  if (!viagem) return;
+  viagem.marcas.push({ t_ms: Date.now(), lat: ultimo ? +ultimo.lat.toFixed(6) : null, lon: ultimo ? +ultimo.lon.toFixed(6) : null,
+    vel_ms: ultimo && ultimo.v !== null ? +ultimo.v.toFixed(2) : null });
+  $("marcas").textContent = viagem.marcas.length + " momento(s) marcado(s). Último às " + new Date().toLocaleTimeString("pt-BR");
+  if (navigator.vibrate) navigator.vibrate(60);
+  salvarLocal();
+}
+function parar() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null; clearInterval(timerUI); clearInterval(timerSave);
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  viagem.fim_ms = Date.now(); salvarLocal(); mostrarResumo();
+}
+function mostrarResumo() {
+  const A = viagem.amostras; let dist = 0, vs = [];
+  for (let i = 1; i < A.length; i++) {
+    const d = hav(A[i - 1][1], A[i - 1][2], A[i][1], A[i][2]);
+    if (d >= 2 && (A[i][3] ?? 99) <= 30 && (A[i - 1][3] ?? 99) <= 30) dist += d;
+  }
+  A.forEach(a => { if (a[4] !== null && (a[3] ?? 99) <= 50) vs.push(a[4] * 3.6); });
+  vs.sort((x, y) => x - y);
+  const p = q => vs.length ? vs[Math.min(vs.length - 1, Math.floor(vs.length * q))] : null;
+  const itens = [["Linha", viagem.linha + (viagem.veiculo ? " · " + viagem.veiculo : "")], ["Duração", mmss(((viagem.fim_ms || Date.now()) - viagem.inicio_ms) / 1000)],
+    ["Pontos", A.length], ["Distância", fmt(dist / 1000, 1) + " km"], ["Vel. máxima", p(1) !== null ? fmt(vs[vs.length - 1]) + " km/h" : "--"],
+    ["Vel. p95", p(.95) !== null ? fmt(p(.95)) + " km/h" : "--"], ["Marcas", viagem.marcas.length],
+    ["Velocidade do aparelho", vs.length ? Math.round(100 * vs.length / A.length) + "% dos pontos" : "não informada"]];
+  $("resumo").innerHTML = itens.map(([k, v]) => '<div><div class="k">' + k + '</div><div class="v">' + v + '</div></div>').join("");
+  $("btnCompartilhar").hidden = !(navigator.canShare && navigator.canShare({ files: [arquivo()] }));
+  tela("fim");
+}
+function nomeArquivo() {
+  const d = new Date(viagem.inicio_ms), z = n => String(n).padStart(2, "0");
+  return "viagem_" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "_" + z(d.getHours()) + z(d.getMinutes()) + "_linha" + viagem.linha + ".json";
+}
+function arquivo() { return new File([JSON.stringify(viagem)], nomeArquivo(), { type: "application/json" }); }
+function baixar() {
+  const f = arquivo(), url = URL.createObjectURL(f), a = document.createElement("a");
+  a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+async function compartilhar() { try { await navigator.share({ files: [arquivo()], title: "Viagem " + viagem.linha }); } catch (e) {} }
+
+// ---------- eventos ----------
+$("btnIniciar").addEventListener("click", iniciar);
+$("btnMarcar").addEventListener("click", marcar);
+$("btnParar").addEventListener("click", () => { if (confirm("Encerrar a viagem?")) parar(); });
+$("btnBaixar").addEventListener("click", baixar);
+$("btnCompartilhar").addEventListener("click", compartilhar);
+$("btnNova").addEventListener("click", () => {
+  if (!confirm("Já salvou o arquivo desta viagem? Os dados serão apagados deste aparelho.")) return;
+  limparLocal(); viagem = null; tela("prep");
+});
+const pend = lerLocal();
+if (pend && pend.amostras) {
+  $("recuperar").hidden = false;
+  $("recInfo").textContent = "linha " + pend.linha + ", " + pend.amostras.length + " pontos, " + new Date(pend.inicio_ms).toLocaleString("pt-BR");
+  $("btnRecuperar").addEventListener("click", () => { viagem = pend; if (!viagem.fim_ms) viagem.fim_ms = (viagem.amostras.at(-1) || [viagem.inicio_ms])[0]; $("recuperar").hidden = true; mostrarResumo(); });
+  $("btnDescartar").addEventListener("click", () => { if (confirm("Descartar a viagem não finalizada?")) { limparLocal(); $("recuperar").hidden = true; } });
+}
+</script>
+</body>
+</html>

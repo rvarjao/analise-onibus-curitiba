@@ -5,3 +5,5 @@
 dados/
 # novos arquivos baixados da URBS (os já versionados continuam no repositório)
 *.json.xz
+# comparações de viagens (contêm localização)
+comparacao_*.csv

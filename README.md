@@ -54,6 +54,22 @@ python3 processar_ligeirao.py --inicio 2026-03-01 --fim 2026-03-31
 
 Abra `ligeirao.html` no navegador (precisa de internet para os gráficos e o mapa).
 
+## Registrar uma viagem e comparar com a URBS
+
+Para medir o quanto a velocidade estimada pela URBS subestima a real (a URBS registra a posição a cada ~10 s), grave uma viagem como passageiro:
+
+1. Abra `viagem.html` no celular **por HTTPS** (o navegador só libera o GPS em páginas seguras; um arquivo solto no celular não funciona). Hospede-a em qualquer serviço estático gratuito (Cloudflare Pages, Netlify, GitHub Pages em repositório público). A página não envia nada: tudo fica no aparelho.
+2. Escolha a linha, informe o código do veículo se estiver visível, toque em **Iniciar viagem** e mantenha a tela ligada. **Marcar momento** anota um instante (ex.: uma freada ou aceleração forte).
+3. Ao final, **Baixar arquivo** gera `viagem_AAAAMMDD_HHMM_linhaNNN.json`.
+4. No dia seguinte (os dados da URBS chegam com 1 dia de atraso), importe o dia no banco e compare:
+
+```bash
+python3 comparar_viagem.py viagem_20261112_0815_linha203.json
+python3 comparar_viagem.py viagem.json --veiculo BE602 --limite 50
+```
+
+O ônibus é identificado pela proximidade entre a sua trilha e as posições da URBS na mesma linha e horário. A saída mostra, trecho a trecho, a velocidade da URBS contra a média e o pico medidos pelo celular, e conta quantos trechos passam do limite em cada método. As viagens contêm a sua localização: `*.json` e `comparacao_*.csv` estão no `.gitignore`.
+
 ## Grupos
 
 - **Ligeirão**: linhas 250, 500 e 550.
