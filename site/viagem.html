@@ -89,12 +89,15 @@
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
   .chartbox { position: relative; height: 280px; margin-top: 8px; }
   #mapa { height: 360px; border-radius: 10px; margin-top: 8px; }
+  .voltar { display: inline-block; margin: 0 0 10px; font-size: .9rem; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .voltar:hover { text-decoration: underline; }
   .vazio { color: var(--text-3); font-size: .9rem; padding: 8px 0; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main id="main">
+  <a class="voltar" href="./index.html">← Painel de velocidades</a>
   <h1>Registrar viagem</h1>
   <p class="sub" id="subtitulo">Grava sua posição e a velocidade medida pelo GPS do celular para comparar com os dados da URBS.</p>
 
