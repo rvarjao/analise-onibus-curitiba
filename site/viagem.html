@@ -146,7 +146,7 @@
         <div><div class="k">Tempo</div><div class="v" id="tempo">00:00</div></div>
         <div><div class="k">Pontos gravados</div><div class="v" id="pontos">0</div></div>
         <div><div class="k">Precisão</div><div class="v" id="prec">--</div></div>
-        <div><div class="k">Máxima</div><div class="v" id="vmax">--</div></div>
+        <div><div class="k">Máxima</div><div class="v" id="vmax">--</div><button class="link" id="revisarMax" type="button">Revisar máxima</button></div>
       </div>
       <button class="sec" id="btnMarcar" type="button">Marcar momento</button>
       <div class="marcas" id="marcas"></div>
@@ -160,7 +160,7 @@
     <div class="card">
       <h2>Viagem finalizada</h2>
       <div class="grid" id="resumo"></div>
-      <button id="btnEnviar" type="button">Enviar para o Supabase</button>
+      <button class="sec" id="revisarFim" type="button">Revisar pontos do GPS</button><button id="btnEnviar" type="button">Enviar para o Supabase</button>
       <div class="msg" id="msgEnvio" role="status"></div>
       <button class="sec" id="btnBaixar" type="button">Baixar arquivo .json</button>
       <button class="sec" id="btnCompartilhar" type="button" hidden>Compartilhar arquivo</button>
@@ -202,7 +202,7 @@
       </div>
     </div>
   </section>
-</main>
+</main><dialog id="revisao" style="width:min(94vw,480px);max-height:85vh;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><h2>Revisar pontos do GPS</h2><p class="aviso">Escolha um ponto para corrigir ou desconsiderar. A leitura original é preservada.</p><label for="pontoRev">Ponto (maiores velocidades primeiro)</label><select id="pontoRev"></select><p id="infoRev" class="aviso"></p><label for="valorRev">Velocidade corrigida (km/h)</label><input id="valorRev" type="number" min="0" max="120" step="0.1"><button id="salvarRev" type="button">Salvar correção</button><button id="excluirRev" class="sec" type="button">Desconsiderar ponto</button><button id="restaurarRev" class="sec" type="button">Restaurar leitura original</button><button id="fecharRev" class="sec" type="button">Fechar</button></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -302,7 +302,8 @@ $("btnSair").addEventListener("click", async () => {
 async function enviar(v) {
   const c = cliente(); if (!c) throw new Error("Supabase não configurado.");
   if (v.amostras.length < 2) throw new Error(`A viagem da linha ${v.linha} tem poucos pontos de GPS para enviar; baixe ou descarte.`);
-  const { data, error } = await c.rpc("salvar_viagem", { p: v });
+  const payload={...v, amostras:v.amostras.map((a,i)=>{const b=[...a];b[4]=leitura(v,i).valor;return b;}), amostras_originais:v.amostras};
+  const { data, error } = await c.rpc("salvar_viagem", { p: payload });
   if (error) throw error;
   removerPendente(v.id_local);
   return data;
@@ -334,6 +335,53 @@ function iniciar() {
   timerSave = setInterval(salvarLocal, 10000);
   salvarLocal();
 }
+const LIMITE_GPS = 120, ACEL_GPS = 4;
+function leitura(v,i) {
+  const a=v.amostras[i], b=v.amostras[i-1], dt=b?(a[0]-b[0])/1000:0;
+  const calc=b&&dt>0&&dt<=30?hav(b[1],b[2],a[1],a[2])/dt:null;
+  const raw=a[4] ?? calc;
+  const anterior=b?.[4];
+  let motivo="";
+  if(raw==null||!Number.isFinite(raw)||raw<0||raw*3.6>LIMITE_GPS) motivo="Velocidade inválida";
+  else if((a[3]??99)>50) motivo="Precisão baixa";
+  else if(a[4]==null && ((b?.[3]??99)>50)) motivo="Precisão baixa no ponto anterior";
+  else if(calc!=null && calc*3.6>LIMITE_GPS && hav(b[1],b[2],a[1],a[2])>(a[3]??0)+(b[3]??0)) motivo="Salto de posição";
+  else if(anterior!=null && anterior>=0 && anterior*3.6<=LIMITE_GPS && (b[3]??99)<=50 && dt>0 && dt<=5 && Math.abs(raw-anterior)/dt>ACEL_GPS) motivo="Variação brusca";
+  const edit=v.revisoes?.[i];
+  return {raw, motivo, valor:edit? (edit.excluido?null:edit.vel_ms):motivo?null:raw};
+}
+function recalcularMax() {
+  vmax=0;
+  viagem.amostras.forEach((a,i)=>{const x=leitura(viagem,i).valor;if(x!=null)vmax=Math.max(vmax,x*3.6);});
+}
+function abrirRevisao(maxima=false) {
+  if(!viagem?.amostras.length)return;
+  const ids=viagem.amostras.map((a,i)=>i).sort((i,j)=>(leitura(viagem,j).raw??-1)-(leitura(viagem,i).raw??-1));
+  $("pontoRev").replaceChildren(...ids.map(i=>{const x=leitura(viagem,i),o=document.createElement("option");o.value=i;o.textContent=new Date(viagem.amostras[i][0]).toLocaleTimeString("pt-BR")+" · "+(x.raw==null?"sem velocidade":fmt(x.raw*3.6)+" km/h")+(viagem.revisoes?.[i]?" · revisado":x.motivo?" · suspeito":"");return o;}));
+  if(maxima){const valid=ids.filter(i=>leitura(viagem,i).valor!=null).sort((i,j)=>leitura(viagem,j).valor-leitura(viagem,i).valor);if(valid.length)$("pontoRev").value=valid[0];}
+  mostrarPonto(); if(!$("revisao").open)$("revisao").showModal();
+}
+function mostrarPonto(){
+  const i=Number($("pontoRev").value),x=leitura(viagem,i),a=viagem.amostras[i];
+  $("infoRev").textContent="Precisão: "+(a[3]??"—")+" m. "+(x.motivo||"Sem alerta automático.")+(viagem.revisoes?.[i]?" Revisão manual aplicada.":"");
+  $("valorRev").value=x.valor==null?"":(x.valor*3.6).toFixed(1);
+}
+function aplicarRevisao(tipo){
+  const i=Number($("pontoRev").value); viagem.revisoes??={};
+  if(tipo==="restaurar")delete viagem.revisoes[i];
+  else if(tipo==="excluir")viagem.revisoes[i]={excluido:true};
+  else {const campo=$("valorRev"),n=Number(campo.value);if(!campo.value||!Number.isFinite(n)||n<0||n>LIMITE_GPS){alert("Informe uma velocidade entre 0 e 120 km/h.");return;}viagem.revisoes[i]={vel_ms:n/3.6};}
+  recalcularMax();
+  if(watchId!==null){salvarLocal();atualizarUI();}else{if(!guardarPendente(viagem)){alert("Não foi possível guardar a revisão no aparelho.");salvarLocal();}mostrarResumo();}
+  abrirRevisao();$("pontoRev").value=i;mostrarPonto();
+}
+$("revisarMax").onclick=()=>abrirRevisao(true);
+$("revisarFim").onclick=()=>abrirRevisao();
+$("pontoRev").onchange=mostrarPonto;
+$("salvarRev").onclick=()=>aplicarRevisao("salvar");
+$("excluirRev").onclick=()=>aplicarRevisao("excluir");
+$("restaurarRev").onclick=()=>aplicarRevisao("restaurar");
+$("fecharRev").onclick=()=>$("revisao").close();
 function aoPosicao(p) {
   const c = p.coords, t = p.timestamp;
   if (ultimo && t <= ultimo.t) return;                       // ignora repetidos
@@ -343,7 +391,7 @@ function aoPosicao(p) {
   let v = vel_ms, calc = false;
   if (v === null && ultimo) { const dt = (t - ultimo.t) / 1000; if (dt > 0) { v = hav(ultimo.lat, ultimo.lon, c.latitude, c.longitude) / dt; calc = true; } }
   ultimo = { t, lat: c.latitude, lon: c.longitude, acc: c.accuracy, v, calc };
-  if (v !== null && (c.accuracy === null || c.accuracy <= 50)) vmax = Math.max(vmax, v * 3.6);
+  const validada = leitura(viagem, viagem.amostras.length-1); ultimo.v = validada.valor; if(validada.valor!==null) vmax=Math.max(vmax,validada.valor*3.6);
   $("pontos").textContent = viagem.amostras.length;
   const a = c.accuracy;
   status(a <= 20 ? "GPS bom" : a <= 50 ? "GPS razoável" : "GPS fraco (precisão baixa)", a <= 20 ? "ok" : a <= 50 ? "warn" : "bad");
@@ -392,9 +440,9 @@ function resumoLocal(v) {
   const A = v.amostras; let dist = 0; const vs = [];
   for (let i = 1; i < A.length; i++) {
     const d = hav(A[i - 1][1], A[i - 1][2], A[i][1], A[i][2]);
-    if (d >= 2 && (A[i][3] ?? 99) <= 30 && (A[i - 1][3] ?? 99) <= 30) dist += d;
+    if (d >= 2 && (A[i][3] ?? 99) <= 30 && (A[i - 1][3] ?? 99) <= 30 && (A[i][0]-A[i-1][0])>0 && d*3600/(A[i][0]-A[i-1][0])<=LIMITE_GPS) dist += d;
   }
-  A.forEach(a => { if (a[4] !== null && (a[3] ?? 99) <= 50) vs.push(a[4] * 3.6); });
+  A.forEach((a,i) => { const x=leitura(v,i).valor; if(x!==null) vs.push(x*3.6); });
   vs.sort((x, y) => x - y);
   const q = p => vs.length ? vs[Math.min(vs.length - 1, Math.floor(vs.length * p))] : null;
   return { dist, dur: ((v.fim_ms || Date.now()) - v.inicio_ms) / 1000, max: vs.length ? vs[vs.length - 1] : null, p95: q(.95), comVel: vs.length };
@@ -407,7 +455,7 @@ function mostrarResumo() {
     ["Velocidade do aparelho", r.comVel ? Math.round(100 * r.comVel / A.length) + "% dos pontos" : "não informada"]];
   $("resumo").innerHTML = itens.map(([k, v]) => '<div><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>').join("");
   $("btnCompartilhar").hidden = !(navigator.canShare && navigator.canShare({ files: [arquivo(viagem)] }));
-  $("btnEnviar").hidden = false; $("btnEnviar").disabled = false; msg($("msgEnvio"), "");
+  $("revisarFim").hidden=false; $("btnEnviar").hidden = false; $("btnEnviar").disabled = false; msg($("msgEnvio"), "");
   tela("fim");
 }
 function nomeArquivo(v) {
@@ -422,7 +470,7 @@ function baixar(v) {
 async function compartilhar() { try { await navigator.share({ files: [arquivo(viagem)], title: "Viagem " + viagem.linha }); } catch (e) {} }
 async function enviarAtual() {
   $("btnEnviar").disabled = true; msg($("msgEnvio"), "Enviando…");
-  try { await enviar(viagem); $("btnEnviar").hidden = true; msg($("msgEnvio"), "Viagem enviada. Ela já aparece em Minhas viagens.", "ok"); enviadas = []; }
+  try { await enviar(viagem); $("revisarFim").hidden=true; $("btnEnviar").hidden = true; msg($("msgEnvio"), "Viagem enviada. Ela já aparece em Minhas viagens.", "ok"); enviadas = []; }
   catch (e) { $("btnEnviar").disabled = false; msg($("msgEnvio"), traduzErro(e) + " Ela continua guardada neste aparelho.", "bad"); }
 }
 
@@ -462,7 +510,7 @@ function renderPendentes() {
       <div class="d">${dataHora(v.inicio_ms)} · ${mmss(r.dur)} · ${fmt(r.dist / 1000, 1)} km · ${v.amostras.length} pontos</div>
       ${v.obs ? `<div class="d">${esc(v.obs)}</div>` : ""}
       <div class="acoes"><button class="mini" data-acao="enviar" data-id="${esc(v.id_local)}" type="button">Enviar</button>
-      <button class="mini sec" data-acao="baixar" data-id="${esc(v.id_local)}" type="button">Baixar .json</button>
+      <button class="mini sec" data-acao="revisar" data-id="${esc(v.id_local)}" type="button">Revisar</button><button class="mini sec" data-acao="baixar" data-id="${esc(v.id_local)}" type="button">Baixar .json</button>
       <button class="mini sec" data-acao="descartar" data-id="${esc(v.id_local)}" type="button">Descartar</button></div></div></div>`;
   }).join("");
 }
@@ -482,6 +530,7 @@ $("listaPend").addEventListener("click", e => {
   const b = e.target.closest("button[data-acao]"); if (!b) return;
   const v = pendentes().find(x => x.id_local === b.dataset.id); if (!v) return;
   if (b.dataset.acao === "enviar") enviarPendentes([v]);
+  else if (b.dataset.acao === "revisar") { viagem=v; mostrarResumo(); abrirRevisao(); }
   else if (b.dataset.acao === "baixar") baixar(v);
   else if (b.dataset.acao === "descartar" && confirm("Apagar esta viagem do aparelho? Ela ainda não foi enviada e não poderá ser recuperada.")) { removerPendente(v.id_local); renderPendentes(); }
 });
@@ -581,9 +630,9 @@ function curva(pts) {
     if (q) {
       const d = hav(q[2], q[3], p[2], p[3]), dt = p[0] - q[0];
       if (d >= 2 && (p[4] ?? 99) <= 30 && (q[4] ?? 99) <= 30) dist += d;
-      if (v == null && dt > 0 && dt <= 30) v = d / dt * 3.6;
+      // Não reconstruir velocidades invalidadas a partir da posição.
     }
-    if (v == null || v > 150) continue;
+    if (v == null || v < 0 || v > LIMITE_GPS) continue;
     const k = Math.floor((eixo === "tempo" ? p[0] : dist) / passo), a = acc.get(k) || [0, 0];
     a[0] += v; a[1]++; acc.set(k, a);
   }
