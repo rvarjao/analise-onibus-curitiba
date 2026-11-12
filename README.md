@@ -46,7 +46,7 @@ O `onibus.duckdb` **não é versionado** (veja `.gitignore`): ele pode chegar a 
 
 ### 3. Publicar dados derivados no Supabase
 
-Primeiro aplique [`supabase/migrations/0001_painel.sql`](supabase/migrations/0001_painel.sql) no banco — pelo SQL Editor do Supabase ou com `supabase db push` após vincular o projeto. A migration cria as tabelas agregadas, RLS e a função `painel_dados()` usada pelo site.
+Primeiro aplique as migrations em [`supabase/migrations/`](supabase/migrations/) no banco — pelo SQL Editor do Supabase ou com `supabase db push` após vincular o projeto. Elas criam as tabelas agregadas, RLS e as funções públicas usadas pelo site. A migration `0005_filtro_datas.sql` é necessária para o filtro por data/período do painel.
 
 Em seguida, crie um `.env` local a partir de `.env.example` e informe a connection string do Postgres. O arquivo é ignorado pelo Git.
 
