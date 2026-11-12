@@ -27,6 +27,10 @@ alter table public.linhas enable row level security;
 alter table public.metricas_linha_hora enable row level security;
 alter table public.veiculos_resumo enable row level security;
 alter table public.trechos_publicos enable row level security;
+drop policy if exists "leitura publica de linhas" on public.linhas;
+drop policy if exists "leitura publica de metricas" on public.metricas_linha_hora;
+drop policy if exists "leitura publica de resumo de veiculos" on public.veiculos_resumo;
+drop policy if exists "leitura publica de trechos derivados" on public.trechos_publicos;
 create policy "leitura publica de linhas" on public.linhas for select to anon using (true);
 create policy "leitura publica de metricas" on public.metricas_linha_hora for select to anon using (true);
 create policy "leitura publica de resumo de veiculos" on public.veiculos_resumo for select to anon using (true);
@@ -36,8 +40,8 @@ grant select on public.linhas, public.metricas_linha_hora, public.veiculos_resum
 create or replace function public.painel_dados()
 returns jsonb language sql stable security invoker set search_path = public as $$
 with grupos as (select array['LIGEIRÃO','EXPRESSO']::text[] nomes), ls as (
- select l.cod,l.nome,l.categoria,array_position((select nomes from grupos),l.categoria)-1 g,row_number() over(order by l.cod)-1 idx
- from linhas l where l.categoria = any((select nomes from grupos))
+ select l.cod,l.nome,l.categoria,array_position(g.nomes,l.categoria)-1 g,row_number() over(order by l.cod)-1 idx
+ from linhas l cross join grupos g where l.categoria = any(g.nomes)
 ), ds as (select array_agg(dia order by dia) v from (select distinct dia from metricas_linha_hora) x),
 hbin as (select ls.idx,h,bin,coalesce(sum((m.histograma->>bin)::bigint),0) n from ls cross join generate_series(0,23) h cross join generate_series(0,89) bin left join metricas_linha_hora m on m.cod_linha=ls.cod and m.hora=h group by ls.idx,h,bin),
 hist as (select idx,jsonb_agg(hv order by h) v from (select idx,h,jsonb_agg(n order by bin) hv from hbin group by idx,h) x group by idx),
