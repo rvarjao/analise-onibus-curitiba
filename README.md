@@ -63,7 +63,7 @@ O sincronizador transmite somente métricas por linha/hora, resumos de veículos
 
 O conteúdo publicado está em `site/`: `index.html`, `styles.css` e `app.js`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página.
 
-Antes do primeiro deploy, crie no repositório as **Actions variables** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
+Antes do primeiro deploy, crie no ambiente `github-pages` os **Actions secrets** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
 
 ## Registrar uma viagem e comparar com a URBS
 
