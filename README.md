@@ -91,14 +91,21 @@ O espaço do navegador para viagens não enviadas é limitado (cerca de 5 MB, ou
 
 ### Comparar com a URBS
 
-Para medir o quanto a velocidade estimada pela URBS subestima a real (a URBS registra a posição a cada ~10 s), baixe o `.json` da viagem (antes de enviar, ou pelo resumo) e, no dia seguinte (os dados da URBS chegam com 1 dia de atraso), importe o dia no banco e compare:
+Para medir o quanto a velocidade estimada pela URBS subestima a real (a URBS registra a posição a cada ~10 s), `comparar_viagem.py` cruza a viagem gravada com as posições da URBS no `onibus.duckdb` local. Os dados da URBS chegam com 1 dia de atraso: importe o dia da viagem (`baixar_dias.py` + `importar_banco.py`) antes de comparar.
+
+As viagens são lidas direto do Supabase, pela mesma `SUPABASE_DB_URL` do `.env` usada no `sincronizar_supabase.py`:
 
 ```bash
-python3 comparar_viagem.py viagem_20261112_0815_linha203.json
-python3 comparar_viagem.py viagem.json --veiculo BE602 --limite 50
+python3 comparar_viagem.py --listar                          # viagens enviadas (id, início, linha, usuário…)
+python3 comparar_viagem.py --listar --linha 203 --usuario voce@exemplo.com
+python3 comparar_viagem.py 3f2a9c1e                          # pelo id (basta o começo)
+python3 comparar_viagem.py --ultima --linha 203              # a mais recente da linha
+python3 comparar_viagem.py 3f2a9c1e --veiculo BE602 --limite 50
 ```
 
-O ônibus é identificado pela proximidade entre a sua trilha e as posições da URBS na mesma linha e horário. A saída mostra, trecho a trecho, a velocidade da URBS contra a média e o pico medidos pelo celular, e conta quantos trechos passam do limite em cada método. As viagens contêm a sua localização: `*.json` e `comparacao_*.csv` estão no `.gitignore`.
+Uma viagem ainda não enviada pode ser comparada pelo arquivo baixado na página: `python3 comparar_viagem.py viagem_20261112_0815_linha203.json`.
+
+O ônibus é identificado pela proximidade entre a sua trilha e as posições da URBS na mesma linha e horário. A saída mostra, trecho a trecho, a velocidade da URBS contra a média e o pico medidos pelo celular, e conta quantos trechos passam do limite em cada método. A conexão do `.env` é a do Postgres do projeto e enxerga as viagens de todos os usuários (o RLS vale só para a página). As viagens contêm localização: `*.json` e `comparacao_*.csv` estão no `.gitignore`.
 
 ## Grupos
 

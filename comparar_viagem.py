@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """
 Compara uma viagem gravada com viagem.html (velocidade medida pelo GPS do celular)
-com os registros da URBS no banco (velocidade estimada entre posições consecutivas).
+com os registros da URBS no banco local (velocidade estimada entre posições consecutivas).
+
+A viagem é lida do Supabase (tabelas viagens/viagem_pontos, via SUPABASE_DB_URL do .env)
+ou de um arquivo .json baixado pela página.
 
 Uso:
-    python3 comparar_viagem.py viagem_20261112_0815_linha203.json
-    python3 comparar_viagem.py viagem.json --veiculo BE602      # se você sabe o código do ônibus
-    python3 comparar_viagem.py viagem.json --limite 50
+    python3 comparar_viagem.py --listar                       # viagens enviadas ao Supabase
+    python3 comparar_viagem.py --listar --linha 203 --usuario voce@exemplo.com
+    python3 comparar_viagem.py 3f2a9c1e                       # id da viagem (basta o começo)
+    python3 comparar_viagem.py --ultima --linha 203           # a mais recente (da linha)
+    python3 comparar_viagem.py 3f2a9c1e --veiculo BE602 --limite 50
+    python3 comparar_viagem.py viagem_20261112_0815_linha203.json   # arquivo local
 
 Requisito: o dia da viagem já estar importado no banco (importar_banco.py). Os arquivos da URBS
 chegam com um dia de atraso: uma viagem em 12/11 aparece no arquivo extraído em 13/11.
 
 Saídas: resumo no terminal e um CSV com o trecho a trecho (comparacao_<viagem>.csv).
+A conexão do .env é a do Postgres do Supabase: ela enxerga as viagens de todos os usuários.
 Sem --veiculo, o ônibus é identificado pela proximidade entre a trilha do celular e as posições
 da URBS na mesma linha e horário.
 """
@@ -46,8 +53,67 @@ def local(ms, fuso_min):
     return EPOCA + datetime.timedelta(milliseconds=ms - fuso_min * 60000)
 
 
-def carregar(caminho):
-    v = json.load(open(caminho, encoding="utf-8"))
+def conectar_supabase():
+    try:
+        import psycopg
+        from dotenv import load_dotenv
+    except ImportError:
+        sys.exit("Instale as dependências: pip install -r requirements.txt")
+    load_dotenv()
+    url = os.getenv("SUPABASE_DB_URL")
+    if not url:
+        sys.exit("Defina SUPABASE_DB_URL no .env (veja .env.example) ou informe um arquivo .json.")
+    return psycopg.connect(url)
+
+
+SQL_LISTA = """SELECT v.id::text, u.email, v.linha, v.veiculo, v.inicio AT TIME ZONE 'America/Sao_Paulo', v.duracao_s,
+                      v.distancia_m, v.vel_max_kmh, v.n_pontos, v.obs
+               FROM viagens v LEFT JOIN auth.users u ON u.id = v.usuario_id
+               WHERE (%(linha)s::text IS NULL OR v.linha = %(linha)s) AND (%(usuario)s::text IS NULL OR u.email ILIKE %(usuario)s)"""
+
+
+def listar_supabase(linha, usuario, n):
+    with conectar_supabase() as con:
+        rows = con.execute(SQL_LISTA + " ORDER BY v.inicio DESC LIMIT %(n)s", {"linha": linha, "usuario": usuario, "n": n}).fetchall()
+    if not rows:
+        sys.exit("Nenhuma viagem encontrada no Supabase.")
+    print("%-8s  %-16s  %-5s  %-7s  %8s  %7s  %6s  %s" % ("id", "início (local)", "linha", "veículo", "duração", "km", "máx", "usuário / obs."))
+    for vid, email, li, veic, ini, dur, dist, vmax, n_pts, obs in rows:
+        print("%-8s  %-16s  %-5s  %-7s  %8s  %7.1f  %6s  %s" % (
+            vid[:8], ini.strftime("%d/%m/%Y %H:%M"), li, veic or "-", "%d:%02d" % divmod(dur // 60, 60) if dur >= 3600 else "%d min" % (dur // 60),
+            float(dist) / 1000, "%.0f" % vmax if vmax is not None else "-", (email or "?") + (" · " + obs if obs else "")))
+    print("\nCompare com:  python3 comparar_viagem.py <id>")
+
+
+def ler_supabase(ident, ultima, linha, usuario):
+    """Monta a viagem no mesmo formato do .json gerado pela página."""
+    with conectar_supabase() as con:
+        if ultima:
+            rows = con.execute(SQL_LISTA + " ORDER BY v.inicio DESC LIMIT 1", {"linha": linha, "usuario": usuario}).fetchall()
+            if not rows:
+                sys.exit("Nenhuma viagem encontrada no Supabase.")
+        else:
+            rows = con.execute("SELECT id::text FROM viagens WHERE id::text LIKE %s ORDER BY inicio DESC LIMIT 6", [ident.lower() + "%"]).fetchall()
+            if not rows:
+                sys.exit("Viagem %s não encontrada no Supabase. Use --listar para ver os ids." % ident)
+            if len(rows) > 1:
+                sys.exit("O id %s é ambíguo (%s). Informe mais caracteres." % (ident, ", ".join(r[0][:12] for r in rows)))
+        vid = rows[0][0]
+        linha_v, nome, veic, obs, ini, fim, fuso, marcas = con.execute(
+            """SELECT linha, nome_linha, veiculo, obs, (extract(epoch FROM inicio) * 1000)::bigint, (extract(epoch FROM fim) * 1000)::bigint,
+                      fuso_min, marcas FROM viagens WHERE id = %s""", [vid]).fetchone()
+        pts = con.execute("""SELECT (extract(epoch FROM t) * 1000)::bigint, lat, lon, precisao_m, vel_ms, rumo
+                             FROM viagem_pontos WHERE viagem_id = %s ORDER BY seq""", [vid]).fetchall()
+    return {"id": vid, "linha": linha_v, "nome_linha": nome, "veiculo": veic, "obs": obs, "inicio_ms": ini, "fim_ms": fim,
+            "fuso_min": fuso, "marcas": marcas or [], "amostras_colunas": ["t_ms", "lat", "lon", "precisao_m", "vel_ms", "rumo"],
+            "amostras": [list(p) for p in pts]}
+
+
+def ler_arquivo(caminho):
+    return json.load(open(caminho, encoding="utf-8"))
+
+
+def preparar(v):
     cols = v["amostras_colunas"]
     am = []
     for linha in v["amostras"]:
@@ -63,7 +129,7 @@ def carregar(caminho):
             if d > 0:
                 a["v"] = hav(am[i - 1]["lat"], am[i - 1]["lon"], a["lat"], a["lon"]) / d
                 a["calc"] = True
-    return v, am
+    return am
 
 
 def escolher_veiculo(fixes_por_veic, am, veiculo=None):
@@ -102,14 +168,29 @@ def interpolar(am, tempos, t):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("viagem", help="arquivo .json gerado pelo viagem.html")
+    ap.add_argument("viagem", nargs="?", help="id da viagem no Supabase (ou o começo dele) ou arquivo .json da página")
+    ap.add_argument("--listar", action="store_true", help="lista as viagens enviadas ao Supabase e sai")
+    ap.add_argument("--ultima", action="store_true", help="usa a viagem mais recente do Supabase (respeita --linha e --usuario)")
+    ap.add_argument("--linha", help="filtra --listar/--ultima por linha")
+    ap.add_argument("--usuario", help="filtra --listar/--ultima pelo e-mail de quem gravou")
+    ap.add_argument("-n", type=int, default=30, help="quantas viagens o --listar mostra (padrão 30)")
     ap.add_argument("--banco", default="onibus.duckdb")
     ap.add_argument("--veiculo", help="código do ônibus (padrão: identificado automaticamente)")
     ap.add_argument("--limite", type=float, default=50, help="limite de velocidade para a contagem (km/h, padrão 50)")
     ap.add_argument("--saida", help="CSV de saída (padrão: comparacao_<viagem>.csv)")
     a = ap.parse_args()
 
-    viagem, am = carregar(a.viagem)
+    if a.listar:
+        return listar_supabase(a.linha, a.usuario, a.n)
+    if a.viagem and os.path.isfile(a.viagem):
+        viagem, nome_saida = ler_arquivo(a.viagem), os.path.splitext(os.path.basename(a.viagem))[0]
+    elif a.viagem or a.ultima:
+        viagem = ler_supabase(a.viagem, a.ultima, a.linha, a.usuario)
+        nome_saida = "viagem_%s_linha%s_%s" % (local(viagem["inicio_ms"], viagem["fuso_min"]).strftime("%Y%m%d_%H%M"), viagem["linha"], viagem["id"][:8])
+        print("Viagem %s lida do Supabase." % viagem["id"])
+    else:
+        ap.error("informe o id da viagem, um arquivo .json, --ultima ou --listar")
+    am = preparar(viagem)
     if len(am) < 10:
         sys.exit("Viagem com poucas amostras (%d)." % len(am))
     t0, t1 = am[0]["dt"], am[-1]["dt"]
@@ -165,7 +246,7 @@ def main():
         s["dif_media"] = s["v_urbs"] - s["v_cel_media"]
         s["dif_max"] = s["v_urbs"] - s["v_cel_max"]
 
-    saida = a.saida or "comparacao_%s.csv" % os.path.splitext(os.path.basename(a.viagem))[0]
+    saida = a.saida or "comparacao_%s.csv" % nome_saida
     with open(saida, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["hora_local", "dt_s", "v_urbs_kmh", "v_celular_media_kmh", "v_celular_max_kmh", "dif_urbs_menos_media", "dif_urbs_menos_max", "dist_urbs_celular_m"])
