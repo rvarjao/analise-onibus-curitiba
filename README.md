@@ -61,18 +61,37 @@ O sincronizador transmite somente métricas por linha/hora, resumos de veículos
 
 ### 4. Publicar o frontend no GitHub Pages
 
-O conteúdo publicado está em `site/`: `index.html`, `styles.css` e `app.js`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página.
+O conteúdo publicado está em `site/`: `index.html`, `styles.css`, `app.js` e `viagem.html`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página.
 
 Antes do primeiro deploy, crie no ambiente `github-pages` os **Actions secrets** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
 
-## Registrar uma viagem e comparar com a URBS
+## Registrar uma viagem
 
-Para medir o quanto a velocidade estimada pela URBS subestima a real (a URBS registra a posição a cada ~10 s), grave uma viagem como passageiro:
+A página `site/viagem.html` (publicada como `viagem.html` junto com o painel) grava viagens feitas como passageiro e guarda cada uma no Supabase, ligada à conta de quem gravou.
 
-1. Abra `viagem.html` no celular **por HTTPS** (o navegador só libera o GPS em páginas seguras; um arquivo solto no celular não funciona). Hospede-a em qualquer serviço estático gratuito (Cloudflare Pages, Netlify, GitHub Pages em repositório público). A página não envia nada: tudo fica no aparelho.
-2. Escolha a linha, informe o código do veículo se estiver visível, toque em **Iniciar viagem** e mantenha a tela ligada. **Marcar momento** anota um instante (ex.: uma freada ou aceleração forte).
-3. Ao final, **Baixar arquivo** gera `viagem_AAAAMMDD_HHMM_linhaNNN.json`.
-4. No dia seguinte (os dados da URBS chegam com 1 dia de atraso), importe o dia no banco e compare:
+### Preparar o Supabase (uma vez)
+
+1. Aplique [`supabase/migrations/0004_viagens.sql`](supabase/migrations/0004_viagens.sql). Ela cria:
+   - `viagens`: uma linha por viagem, com linha, veículo, observação, início/fim e resumo (distância, velocidade média, p95 e máxima, marcas);
+   - `viagem_pontos`: as amostras do GPS do celular;
+   - a view `viagem_trechos`: cada deslocamento entre dois pontos consecutivos, com distância, tempo e velocidade (calculada e informada pelo aparelho);
+   - as funções `salvar_viagem` (grava viagem e pontos numa transação; reenviar a mesma viagem não duplica) e `viagens_series` (pontos para a comparação).
+   
+   Com RLS, cada usuário só lê, cria e exclui as próprias viagens; visitantes sem login não acessam nada.
+2. Crie os usuários em **Authentication → Users** (e-mail e senha). Se só você e pessoas convidadas devem gravar, desative **Allow new users to sign up** em Authentication → Sign In / Providers: a página não tem cadastro, mas a API de cadastro do Supabase continua aberta enquanto essa opção estiver ligada.
+
+### Usar no celular
+
+1. Abra `viagem.html` **por HTTPS** (o navegador só libera o GPS em páginas seguras) e entre com o e-mail e a senha cadastrados. A sessão fica salva no aparelho.
+2. Escolha a linha, informe o código do veículo se estiver visível, toque em **Iniciar viagem** e mantenha a tela ligada. **Marcar momento** anota um instante (ex.: uma freada ou aceleração forte). Durante a gravação nada é enviado: os pontos ficam no aparelho e sobrevivem a um recarregamento da página.
+3. Ao encerrar, toque em **Enviar para o Supabase**. Se estiver sem internet ou preferir enviar depois, a viagem fica em **Minhas viagens → Neste aparelho, não enviadas**, com opção de enviar, baixar o `.json` ou descartar.
+4. Em **Minhas viagens**, filtre por linha, marque até 6 viagens e toque em **Comparar**: tabela lado a lado (duração, distância, velocidades, tempo parado), gráfico de velocidade por tempo ou por distância percorrida e mapa com os trajetos.
+
+O espaço do navegador para viagens não enviadas é limitado (cerca de 5 MB, ou 15–20 viagens de uma hora); envie as pendentes de vez em quando.
+
+### Comparar com a URBS
+
+Para medir o quanto a velocidade estimada pela URBS subestima a real (a URBS registra a posição a cada ~10 s), baixe o `.json` da viagem (antes de enviar, ou pelo resumo) e, no dia seguinte (os dados da URBS chegam com 1 dia de atraso), importe o dia no banco e compare:
 
 ```bash
 python3 comparar_viagem.py viagem_20261112_0815_linha203.json
