@@ -1,0 +1,3 @@
+duckdb
+psycopg[binary]
+python-dotenv

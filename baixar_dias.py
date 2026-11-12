@@ -12,8 +12,7 @@ Exemplos:
 Cada dia de veículos tem ~20 MB. Para o ano inteiro use --passo (amostra) ou baixe em partes.
 Só usa a biblioteca padrão do Python. Arquivos já baixados são pulados.
 
-Obs.: a data no nome do arquivo é a da extração; os registros de GPS são do dia anterior
-(o processar_ligeirao.py usa a data real que está dentro do arquivo).
+Obs.: a data no nome do arquivo é a da extração; os registros de GPS são do dia anterior.
 """
 import argparse, datetime, html.parser, os, re, subprocess, sys, time, urllib.parse, urllib.request
 
@@ -145,7 +144,7 @@ def main():
     ap.add_argument("--destino", default=".", help="pasta de destino (padrão: atual)")
     ap.add_argument("--base", default=BASE, help="URL do espelho")
     ap.add_argument("--listar", action="store_true", help="só lista os dias encontrados, sem baixar")
-    ap.add_argument("--processar", action="store_true", help="ao final, importa no banco (importar_banco.py) e gera a página (processar_ligeirao.py)")
+    ap.add_argument("--processar", action="store_true", help="ao final, importa no DuckDB e sincroniza os dados derivados no Supabase")
     a = ap.parse_args()
 
     base = a.base if a.base.endswith("/") else a.base + "/"
@@ -187,7 +186,7 @@ def main():
     if a.processar:
         aqui = os.path.dirname(os.path.abspath(__file__))
         subprocess.run([sys.executable, os.path.join(aqui, "importar_banco.py"), a.destino], check=True)
-        subprocess.run([sys.executable, os.path.join(aqui, "processar_ligeirao.py")], check=True)
+        subprocess.run([sys.executable, os.path.join(aqui, "sincronizar_supabase.py")], check=True)
 
 
 if __name__ == "__main__":

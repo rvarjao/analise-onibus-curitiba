@@ -6,11 +6,11 @@ Página que estima a velocidade dos ônibus das canaletas de Curitiba (Ligeirõe
 
 Os dados da URBS **não trazem velocidade nem o limite da via**. A velocidade é **estimada** pela distância entre dois registros de GPS consecutivos do mesmo veículo dividida pelo tempo. Isso indica *suspeita* de excesso, não é medição de radar. O limite é um valor único (padrão 50 km/h) aplicado a todos os trechos.
 
-## Fluxo
+## Fluxo local e publicação
 
 ```
-baixar_dias.py  ->  importar_banco.py  ->  onibus.duckdb  ->  processar_ligeirao.py  ->  ligeirao.html
-(espelho UFPR)      (*.json.xz p/ banco)    (todas as linhas)    (consulta e gera a página)
+baixar_dias.py  ->  importar_banco.py  ->  onibus.duckdb  ->  sincronizar_supabase.py  ->  Supabase
+(espelho UFPR)      (arquivos locais)         (local)                (dados derivados)       -> GitHub Pages
 ```
 
 Instale a dependência uma vez: `pip install duckdb`.
@@ -44,15 +44,26 @@ FROM trechos WHERE vel_kmh < 90 GROUP BY 1 ORDER BY 3 DESC;
 
 O `onibus.duckdb` **não é versionado** (veja `.gitignore`): ele pode chegar a vários GB. Para recriá-lo, baixe os dias de novo e importe.
 
-### 3. Gerar a página
+### 3. Publicar dados derivados no Supabase
+
+Primeiro aplique [`supabase/migrations/0001_painel.sql`](supabase/migrations/0001_painel.sql) no banco — pelo SQL Editor do Supabase ou com `supabase db push` após vincular o projeto. A migration cria as tabelas agregadas, RLS e a função `painel_dados()` usada pelo site.
+
+Em seguida, crie um `.env` local a partir de `.env.example` e informe a connection string do Postgres. O arquivo é ignorado pelo Git.
 
 ```bash
-python3 processar_ligeirao.py                                    # Ligeirão + Expresso, todos os dias do banco
-python3 processar_ligeirao.py --categorias "LIGEIRÃO"            # só Ligeirão
-python3 processar_ligeirao.py --inicio 2026-03-01 --fim 2026-03-31
+pip install -r requirements.txt
+python3 sincronizar_supabase.py                 # publica o dia mais recente
+python3 sincronizar_supabase.py --todos          # republica todos os dias locais
+python3 sincronizar_supabase.py --dia 2026-11-10 # publica um dia específico
 ```
 
-Abra `ligeirao.html` no navegador (precisa de internet para os gráficos e o mapa).
+O sincronizador transmite somente métricas por linha/hora, resumos de veículos e trechos de 40–90 km/h para o mapa. Os `.json.xz` e `onibus.duckdb` continuam somente no computador.
+
+### 4. Publicar o frontend no GitHub Pages
+
+O conteúdo publicado está em `site/`: `index.html`, `styles.css` e `app.js`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página.
+
+Antes do primeiro deploy, crie no repositório as **Actions variables** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
 
 ## Registrar uma viagem e comparar com a URBS
 
@@ -77,7 +88,7 @@ O ônibus é identificado pela proximidade entre a sua trilha e as posições da
 
 ## Dados no repositório
 
-Os `.json.xz` de 10/11/2026 (dia dos dados; extração em 11/11) ficam versionados como exemplo e para reproduzir a página. Arquivos novos baixados são ignorados pelo Git.
+Os arquivos baixados da URBS e o banco local não são versionados. Se já existirem dados em versões antigas do Git, eles permanecem acessíveis somente no histórico até uma limpeza deliberada de histórico.
 
 ## Licença dos dados
 

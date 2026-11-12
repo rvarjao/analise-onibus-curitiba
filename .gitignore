@@ -3,7 +3,13 @@
 *.duckdb.wal
 *.json
 dados/
+.env
+.env.*
+!.env.example
 # novos arquivos baixados da URBS (os já versionados continuam no repositório)
 *.json.xz
+*.part
 # comparações de viagens (contêm localização)
 comparacao_*.csv
+# Configuração local do frontend; config.example.js é o modelo versionado.
+site/config.js
