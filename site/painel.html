@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análises | Velocidade Curitiba</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="analysis-page">
+  <header class="site-header compact">
+    <a class="brand" href="./index.html" aria-label="Velocidade Curitiba — início"><span class="brand-mark" aria-hidden="true">→</span><span>Velocidade Curitiba</span></a>
+    <nav aria-label="Navegação principal"><a href="./index.html">Início</a><a href="./viagem.html">Registrar viagem</a></nav>
+  </header>
+  <main class="analysis-main">
+    <p class="eyebrow">Painel de dados</p>
+    <h1>Velocidade estimada nas canaletas</h1>
+    <p class="sub" id="subtitulo">Carregando dados…</p>
+    <p class="viagem-link"><a href="./viagem.html">Registrar uma viagem com GPS <span aria-hidden="true">→</span></a></p>
+    <p class="erro" id="erro" hidden></p>
+    <section class="card"><div class="controls"><label>Limite considerado
+      <input id="limite" type="range" min="40" max="80" step="1" value="50"><span class="limval" id="limval"></span>
+    </label><span id="chips" class="controls"></span></div></section>
+    <section class="card"><div class="hero">
+      <div><div class="num" id="hPct">–</div><div class="lbl" id="hPctL">dos trechos a partir do limite</div></div>
+      <div><div class="num" id="hN">–</div><div class="lbl">trechos de GPS analisados</div></div>
+      <div><div class="num" id="hP99">–</div><div class="lbl">velocidade que 99% dos trechos não passam</div></div>
+      <div><div class="num" id="hMax">–</div><div class="lbl">maior velocidade estimada (após filtro)</div></div>
+    </div></section>
+    <section class="card"><h2>Por linha</h2><p class="hint">Cada trecho é o deslocamento entre dois registros consecutivos de GPS do mesmo ônibus.</p><div class="tblwrap"><table id="tLinhas"></table></div></section>
+    <div class="grid2">
+      <section class="card"><h2>Quantos trechos chegam a cada velocidade</h2><p class="hint">% dos trechos com velocidade estimada igual ou maior que o valor do eixo.</p><div class="legend" id="legExc"></div><div class="chartbox"><canvas id="cExc"></canvas></div></section>
+      <section class="card"><h2>Por hora do dia</h2><p class="hint">% dos trechos a partir do limite em cada hora (grupos selecionados).</p><div class="chartbox"><canvas id="cHora"></canvas></div></section>
+    </div>
+    <section class="card"><h2>Onde aconteceu</h2><div class="map-controls" id="mapModes"></div><p class="hint" id="mapHint"></p><div class="legend" id="legMapa"></div><div id="map"></div></section>
+    <section class="card"><h2>Veículos com maior proporção de trechos a partir do limite</h2><p class="hint">Só veículos com pelo menos 100 trechos analisados.</p><div class="tblwrap"><table id="tVeic"></table></div></section>
+    <section class="card"><h2>Como ler estes números</h2><ul class="note" id="notas"></ul></section>
+  </main>
+  <footer class="panel-footer"><a href="./index.html">← Voltar à página inicial</a><a href="./viagem.html">Registrar viagem com GPS</a></footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
+

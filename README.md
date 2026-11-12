@@ -61,7 +61,7 @@ O sincronizador transmite somente métricas por linha/hora, resumos de veículos
 
 ### 4. Publicar o frontend no GitHub Pages
 
-O conteúdo publicado está em `site/`: `index.html`, `styles.css`, `app.js` e `viagem.html`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página.
+O conteúdo publicado está em `site/`: `index.html` (apresentação do projeto), `painel.html` (análises), `styles.css`, `app.js` e `viagem.html`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página. A página inicial direciona para o painel e para o registro de uma viagem.
 
 Antes do primeiro deploy, crie no ambiente `github-pages` os **Actions secrets** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
 
