@@ -1,3 +1,6 @@
+# ambiente virtual Python
+venv/
+
 # banco de dados e arquivos descompactados (grandes)
 *.duckdb
 *.duckdb.wal
