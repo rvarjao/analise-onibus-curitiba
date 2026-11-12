@@ -176,6 +176,10 @@ h2 {
     border: 1px solid var(--border)
 }
 
+.map-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.map-controls button { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; background: transparent; color: var(--text-primary); font: inherit; font-size: .85rem; cursor: pointer; }
+.map-controls button[aria-pressed="true"] { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+
 table {
     width: 100%;
     border-collapse: collapse;

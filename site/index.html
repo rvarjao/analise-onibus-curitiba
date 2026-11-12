@@ -27,12 +27,13 @@
       <section class="card"><h2>Quantos trechos chegam a cada velocidade</h2><p class="hint">% dos trechos com velocidade estimada igual ou maior que o valor do eixo.</p><div class="legend" id="legExc"></div><div class="chartbox"><canvas id="cExc"></canvas></div></section>
       <section class="card"><h2>Por hora do dia</h2><p class="hint">% dos trechos a partir do limite em cada hora (grupos selecionados).</p><div class="chartbox"><canvas id="cHora"></canvas></div></section>
     </div>
-    <section class="card"><h2>Onde aconteceu</h2><p class="hint" id="mapHint"></p><div class="legend" id="legMapa"></div><div id="map"></div></section>
+    <section class="card"><h2>Onde aconteceu</h2><div class="map-controls" id="mapModes"></div><p class="hint" id="mapHint"></p><div class="legend" id="legMapa"></div><div id="map"></div></section>
     <section class="card"><h2>Veículos com maior proporção de trechos a partir do limite</h2><p class="hint">Só veículos com pelo menos 100 trechos analisados.</p><div class="tblwrap"><table id="tVeic"></table></div></section>
     <section class="card"><h2>Como ler estes números</h2><ul class="note" id="notas"></ul></section>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 </body>
