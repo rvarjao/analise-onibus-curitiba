@@ -11,7 +11,7 @@ Uso:
     python3 sincronizar_supabase.py --dia 2026-11-10
     python3 sincronizar_supabase.py --todos
 """
-import argparse, hashlib, os, sys
+import argparse, hashlib, logging, os, sys, time
 from collections import defaultdict
 
 try:
@@ -23,6 +23,27 @@ except ImportError:
 
 V_MAX, V_DETALHE = 90, 40
 CATEGORIAS = ("LIGEIRÃO", "EXPRESSO")
+LOTE_INSERCAO = 1_000
+log = logging.getLogger(__name__)
+
+
+def duracao(inicio):
+    return f"{time.perf_counter() - inicio:.1f}s"
+
+
+def inserir_em_lotes(cur, sql, registros, descricao):
+    """Insere registros em lotes para tornar o progresso visível no terminal."""
+    total = len(registros)
+    if not total:
+        log.info("%s: nenhum registro para enviar", descricao)
+        return
+    inicio = time.perf_counter()
+    lotes = (total + LOTE_INSERCAO - 1) // LOTE_INSERCAO
+    log.info("%s: enviando %d registro(s) em %d lote(s)", descricao, total, lotes)
+    for indice, inicio_lote in enumerate(range(0, total, LOTE_INSERCAO), 1):
+        cur.executemany(sql, registros[inicio_lote:inicio_lote + LOTE_INSERCAO])
+        log.info("%s: lote %d/%d concluído (%d/%d; %s)", descricao, indice, lotes,
+                 min(inicio_lote + LOTE_INSERCAO, total), total, duracao(inicio))
 
 
 def checksum(path):
@@ -42,18 +63,29 @@ def linhas_alvo(con):
 
 
 def publicar_dia(local, remoto, dia, origem, sha):
+    inicio_dia = time.perf_counter()
+    log.info("%s: iniciando publicação", dia)
     codigos = [r[0] for r in linhas_alvo(local)]
     if not codigos:
         raise RuntimeError("Nenhuma linha LIGEIRÃO/EXPRESSO encontrada no DuckDB.")
+    log.info("%s: %d linha(s) alvo", dia, len(codigos))
     with remoto.cursor() as cur:
+        inicio = time.perf_counter()
+        log.info("%s: removendo dados publicados anteriormente", dia)
         cur.execute("DELETE FROM trechos_publicos WHERE dia = %s", [dia])
         cur.execute("DELETE FROM veiculos_resumo WHERE dia = %s", [dia])
         cur.execute("DELETE FROM metricas_linha_hora WHERE dia = %s", [dia])
+        log.info("%s: remoção concluída (%s)", dia, duracao(inicio))
 
         # Cadastro é pequeno e pode ser atualizado a cada execução.
-        cur.executemany("""INSERT INTO linhas (cod, nome, categoria) VALUES (%s, %s, %s)
-                         ON CONFLICT (cod) DO UPDATE SET nome = excluded.nome, categoria = excluded.categoria, atualizado_em = now()""", linhas_alvo(local))
+        inicio = time.perf_counter()
+        linhas = linhas_alvo(local)
+        inserir_em_lotes(cur, """INSERT INTO linhas (cod, nome, categoria) VALUES (%s, %s, %s)
+                         ON CONFLICT (cod) DO UPDATE SET nome = excluded.nome, categoria = excluded.categoria, atualizado_em = now()""", linhas, f"{dia}: linhas")
+        log.info("%s: cadastro de linhas concluído (%s)", dia, duracao(inicio))
 
+        inicio = time.perf_counter()
+        log.info("%s: calculando métricas no DuckDB", dia)
         hist = defaultdict(lambda: [0] * V_MAX)
         q = """SELECT t.cod_linha, hour(t.dthr)::int, floor(t.vel_kmh)::int, count(*)
                FROM trechos t WHERE t.dia = ? AND t.cod_linha IN (SELECT unnest(?))
@@ -68,25 +100,35 @@ def publicar_dia(local, remoto, dia, origem, sha):
             [V_MAX, V_MAX, V_MAX, dia, codigos]).fetchall()
         metricas = [(dia, cod, hora, __import__("json").dumps(hist[(cod, hora)]), n, mx, desc)
                     for cod, hora, n, mx, desc in estat]
-        cur.executemany("""INSERT INTO metricas_linha_hora
+        log.info("%s: %d métrica(s) preparada(s) (%s)", dia, len(metricas), duracao(inicio))
+        inserir_em_lotes(cur, """INSERT INTO metricas_linha_hora
             (dia,cod_linha,hora,histograma,trechos,velocidade_max,descartados)
-            VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s)""", metricas)
+            VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s)""", metricas, f"{dia}: métricas")
 
+        inicio = time.perf_counter()
+        log.info("%s: calculando resumo de veículos no DuckDB", dia)
         veiculos = local.execute("""SELECT dia, cod_linha, veiculo, count(*)
             FROM trechos WHERE dia = ? AND cod_linha IN (SELECT unnest(?)) AND vel_kmh < ? GROUP BY ALL""",
             [dia, codigos, V_MAX]).fetchall()
-        cur.executemany("INSERT INTO veiculos_resumo (dia,cod_linha,veiculo,trechos) VALUES (%s,%s,%s,%s)", veiculos)
+        log.info("%s: %d resumo(s) de veículo preparado(s) (%s)", dia, len(veiculos), duracao(inicio))
+        inserir_em_lotes(cur, "INSERT INTO veiculos_resumo (dia,cod_linha,veiculo,trechos) VALUES (%s,%s,%s,%s)", veiculos, f"{dia}: veículos")
 
+        inicio = time.perf_counter()
+        log.info("%s: selecionando trechos públicos no DuckDB", dia)
         detalhes = local.execute("""SELECT dia, cod_linha, veiculo, dthr, round(vel_kmh, 1), round(lat, 5), round(lon, 5)
             FROM trechos WHERE dia = ? AND cod_linha IN (SELECT unnest(?))
               AND vel_kmh >= ? AND vel_kmh < ?""", [dia, codigos, V_DETALHE, V_MAX]).fetchall()
-        cur.executemany("""INSERT INTO trechos_publicos (dia,cod_linha,veiculo,dthr,velocidade_kmh,lat,lon)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s)""", detalhes)
+        log.info("%s: %d trecho(s) público(s) preparado(s) (%s)", dia, len(detalhes), duracao(inicio))
+        inserir_em_lotes(cur, """INSERT INTO trechos_publicos (dia,cod_linha,veiculo,dthr,velocidade_kmh,lat,lon)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s)""", detalhes, f"{dia}: trechos públicos")
+        inicio = time.perf_counter()
         cur.execute("""INSERT INTO ingestoes_dia (dia,origem,checksum_sha256,registros)
                        VALUES (%s,%s,%s,%s)
                        ON CONFLICT (dia) DO UPDATE SET origem=excluded.origem, checksum_sha256=excluded.checksum_sha256,
                        registros=excluded.registros, processado_em=now()""", [dia, origem, sha, sum(r[3] for r in veiculos)])
-    print(f"{dia}: {len(metricas)} métricas, {len(veiculos)} veículos, {len(detalhes)} trechos publicados")
+        log.info("%s: metadados de ingestão atualizados (%s)", dia, duracao(inicio))
+    log.info("%s: preparado para commit — %d métricas, %d veículos, %d trechos (%s)", dia,
+             len(metricas), len(veiculos), len(detalhes), duracao(inicio_dia))
 
 
 def main():
@@ -95,7 +137,11 @@ def main():
     ap.add_argument("--dia", action="append", help="dia dos dados AAAA-MM-DD; pode repetir")
     ap.add_argument("--todos", action="store_true", help="publica todos os dias do DuckDB")
     ap.add_argument("--resumo", action="store_true")
+    ap.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+                    help="nível de detalhe dos logs (padrão: INFO)")
     a = ap.parse_args()
+    logging.basicConfig(level=getattr(logging, a.log_level), format="%(asctime)s %(levelname)s %(message)s",
+                        datefmt="%H:%M:%S")
     load_dotenv()
     url = os.getenv("SUPABASE_DB_URL")
     if not url:
@@ -108,11 +154,21 @@ def main():
     dias = a.dia or (existentes if a.todos else existentes[-1:])
     if not dias: sys.exit("Não há dias no DuckDB.")
     arquivos = {str(d): n for n, d in local.execute("SELECT arquivo, dia_dados FROM arquivos_importados").fetchall()}
+    log.info("conectando ao Supabase para publicar %d dia(s)", len(dias))
+    inicio_conexao = time.perf_counter()
     with psycopg.connect(url) as remoto:
+        log.info("conexão com Supabase estabelecida (%s)", duracao(inicio_conexao))
         for dia in dias:
             nome = arquivos.get(str(dia), "")
-            publicar_dia(local, remoto, dia, nome or "DuckDB local", checksum(nome))
+            inicio_checksum = time.perf_counter()
+            log.info("%s: calculando checksum da origem", dia)
+            sha = checksum(nome)
+            log.info("%s: checksum concluído (%s)", dia, duracao(inicio_checksum))
+            publicar_dia(local, remoto, dia, nome or "DuckDB local", sha)
+        inicio_commit = time.perf_counter()
+        log.info("confirmando transação no Supabase")
         remoto.commit()
+        log.info("commit concluído (%s)", duracao(inicio_commit))
 
 if __name__ == "__main__":
     main()

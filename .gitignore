@@ -1,5 +1,7 @@
 # ambiente virtual Python
 venv/
+__pycache__/
+*.py[cod]
 
 # banco de dados e arquivos descompactados (grandes)
 *.duckdb
