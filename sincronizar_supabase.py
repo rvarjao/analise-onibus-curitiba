@@ -14,6 +14,8 @@ Uso:
 import argparse, hashlib, logging, os, sys, time
 from collections import defaultdict
 
+from comparacoes_urbs import processar_pendentes
+
 try:
     import duckdb
     import psycopg
@@ -165,6 +167,10 @@ def main():
             sha = checksum(nome)
             log.info("%s: checksum concluído (%s)", dia, duracao(inicio_checksum))
             publicar_dia(local, remoto, dia, nome or "DuckDB local", sha)
+        log.info("processando solicitações pendentes de comparação com a URBS")
+        n_comparacoes = processar_pendentes(local, remoto)
+        if n_comparacoes:
+            log.info("%d comparação(ões) URBS processada(s)", n_comparacoes)
         inicio_commit = time.perf_counter()
         log.info("confirmando transação no Supabase")
         remoto.commit()

@@ -77,7 +77,7 @@ A página `site/viagem.html` (publicada como `viagem.html` junto com o painel) g
    - a view `viagem_trechos`: cada deslocamento entre dois pontos consecutivos, com distância, tempo e velocidade (calculada e informada pelo aparelho);
    - as funções `salvar_viagem` (grava viagem e pontos numa transação; reenviar a mesma viagem não duplica) e `viagens_series` (pontos para a comparação).
    
-   Com RLS, cada usuário só lê, cria, corrige os dados de identificação e exclui as próprias viagens; visitantes sem login não acessam nada. A migration `0007_editar_viagens.sql` habilita a correção de linha, veículo e observação nas viagens já enviadas.
+   Com RLS, cada usuário só lê, cria, corrige os dados de identificação e exclui as próprias viagens; visitantes sem login não acessam nada. A migration `0007_editar_viagens.sql` habilita a correção de linha, veículo e observação nas viagens já enviadas. A `0008_comparacoes_urbs.sql` cria uma fila privada para comparar a viagem com os dados da URBS.
 2. Crie os usuários em **Authentication → Users** (e-mail e senha). Se só você e pessoas convidadas devem gravar, desative **Allow new users to sign up** em Authentication → Sign In / Providers: a página não tem cadastro, mas a API de cadastro do Supabase continua aberta enquanto essa opção estiver ligada.
 
 ### Usar no celular
@@ -86,6 +86,7 @@ A página `site/viagem.html` (publicada como `viagem.html` junto com o painel) g
 2. Escolha a linha, informe o código do veículo se estiver visível, toque em **Iniciar viagem** e mantenha a tela ligada. **Marcar momento** anota um instante (ex.: uma freada ou aceleração forte). Durante a gravação nada é enviado: os pontos ficam no aparelho e sobrevivem a um recarregamento da página.
 3. Ao encerrar, toque em **Enviar para o Supabase**. Se estiver sem internet ou preferir enviar depois, a viagem fica em **Minhas viagens → Neste aparelho, não enviadas**, com opção de enviar, baixar o `.json` ou descartar.
 4. Em **Minhas viagens**, use **Editar** para corrigir a linha, o veículo ou a observação de uma viagem enviada. Por exemplo, é possível corrigir a linha `230` para `203` sem enviar novamente o trajeto. Em seguida, filtre por linha, marque até 6 viagens e toque em **Comparar**: tabela lado a lado (duração, distância, velocidades, tempo parado), gráfico de velocidade por tempo ou por distância percorrida e mapa com os trajetos.
+5. Para comparar uma viagem com a URBS, selecione apenas uma e toque em **Comparar com URBS**. A solicitação é privada e fica pendente até a próxima execução de `sincronizar_supabase.py` no computador que contém o `onibus.duckdb`. O processo identifica o veículo oficial pela proximidade do trajeto e salva somente séries de velocidade com tempo relativo, sem copiar coordenadas para o Supabase. Se não houver dados daquele dia, ou o encaixe não for confiável, a página explica o motivo.
 
 O espaço do navegador para viagens não enviadas é limitado (cerca de 5 MB, ou 15–20 viagens de uma hora); envie as pendentes de vez em quando.
 
