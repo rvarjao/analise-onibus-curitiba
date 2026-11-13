@@ -59,6 +59,8 @@ python3 sincronizar_supabase.py --dia 2026-11-10 # publica um dia específico
 
 O sincronizador transmite somente métricas por linha/hora, resumos de veículos e trechos de 40–90 km/h para o mapa. Os `.json.xz` e `onibus.duckdb` continuam somente no computador.
 
+A migration `0010_posicoes_navegacao.sql` adiciona as posições completas da URBS ao Supabase para a reprodução de trajetos. Após aplicá-la, execute `sincronizar_supabase.py --todos` para popular os dias já importados; essa publicação é substancialmente maior que a do painel.
+
 ### 4. Publicar o frontend no GitHub Pages
 
 O conteúdo publicado está em `site/`: `index.html` (apresentação do projeto), `painel.html` (análises), `styles.css`, `app.js` e `viagem.html`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página. A página inicial direciona para o painel e para o registro de uma viagem.

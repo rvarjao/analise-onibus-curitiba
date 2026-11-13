@@ -124,6 +124,20 @@ def publicar_dia(local, remoto, dia, origem, sha):
         inserir_em_lotes(cur, """INSERT INTO trechos_publicos (dia,cod_linha,veiculo,dthr,velocidade_kmh,lat,lon)
                            VALUES (%s,%s,%s,%s,%s,%s,%s)""", detalhes, f"{dia}: trechos públicos")
         inicio = time.perf_counter()
+        log.info("%s: publicando posições completas para navegação", dia)
+        cur.execute("DELETE FROM posicoes_navegacao WHERE dia = %s", [dia])
+        cursor_local = local.execute("""SELECT DISTINCT cast(dthr as date), cod_linha, veiculo, dthr,
+                                      round(lat, 6), round(lon, 6) FROM posicoes
+                                      WHERE cast(dthr as date) = ? ORDER BY cod_linha, veiculo, dthr""", [dia])
+        total = 0
+        while lote := cursor_local.fetchmany(LOTE_INSERCAO):
+            cur.executemany("""INSERT INTO posicoes_navegacao (dia,cod_linha,veiculo,dthr,lat,lon)
+                             VALUES (%s,%s,%s,%s,%s,%s)""", lote)
+            total += len(lote)
+            if total % (LOTE_INSERCAO * 20) == 0:
+                log.info("%s: %d posições de navegação enviadas", dia, total)
+        log.info("%s: %d posições completas publicadas (%s)", dia, total, duracao(inicio))
+        inicio = time.perf_counter()
         cur.execute("""INSERT INTO ingestoes_dia (dia,origem,checksum_sha256,registros)
                        VALUES (%s,%s,%s,%s)
                        ON CONFLICT (dia) DO UPDATE SET origem=excluded.origem, checksum_sha256=excluded.checksum_sha256,
