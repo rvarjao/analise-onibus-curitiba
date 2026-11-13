@@ -203,6 +203,7 @@
     </div>
   </section>
 </main><dialog id="revisao" style="width:min(94vw,480px);max-height:85vh;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><h2>Revisar pontos do GPS</h2><p class="aviso">Escolha um ponto para corrigir ou desconsiderar. A leitura original é preservada.</p><label for="pontoRev">Ponto (maiores velocidades primeiro)</label><select id="pontoRev"></select><p id="infoRev" class="aviso"></p><label for="valorRev">Velocidade corrigida (km/h)</label><input id="valorRev" type="number" min="0" max="120" step="0.1"><button id="salvarRev" type="button">Salvar correção</button><button id="excluirRev" class="sec" type="button">Desconsiderar ponto</button><button id="restaurarRev" class="sec" type="button">Restaurar leitura original</button><button id="fecharRev" class="sec" type="button">Fechar</button></dialog>
+<dialog id="editarViagem" style="width:min(94vw,480px);border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><form id="formEditarViagem"><h2>Editar viagem</h2><p class="aviso">Você pode corrigir os dados de identificação. O trajeto e as métricas gravadas não são alterados.</p><label for="editarLinha">Linha</label><input id="editarLinha" list="listaLinhas" required autocomplete="off" inputmode="search"><label for="editarVeiculo">Código do veículo</label><input id="editarVeiculo" autocapitalize="characters" autocomplete="off" spellcheck="false"><label for="editarObs">Observação</label><input id="editarObs" maxlength="500"><div class="msg" id="msgEditarViagem" role="status"></div><button id="btnSalvarEdicao" type="submit">Salvar alterações</button><button id="btnCancelarEdicao" class="sec" type="button">Cancelar</button></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -561,7 +562,7 @@ function renderEnviadas() {
       <div class="d">${dataHora(v.inicio)} · ${mmss(v.duracao_s)} · ${fmt(v.distancia_m / 1000, 1)} km</div>
       <div class="d">média ${fmt(v.vel_media_kmh)} · p95 ${fmt(v.vel_p95_kmh)} · máx. ${fmt(v.vel_max_kmh)} km/h</div>
       ${v.obs ? `<div class="d">${esc(v.obs)}</div>` : ""}
-      <div class="acoes"><button class="link" data-excluir="${v.id}" type="button">Excluir</button></div></div></div>`;
+      <div class="acoes"><button class="link" data-editar="${v.id}" type="button">Editar</button><button class="link" data-excluir="${v.id}" type="button">Excluir</button></div></div></div>`;
   }).join("") : `<p class="vazio">${enviadas.length ? "Nenhuma viagem nesta linha." : "Você ainda não enviou viagens."}</p>`;
   $("btnComparar").disabled = !selecionadas.size;
   $("btnComparar").textContent = selecionadas.size ? `Comparar (${selecionadas.size})` : "Comparar";
@@ -574,6 +575,8 @@ $("listaEnv").addEventListener("change", e => {
   renderEnviadas();
 });
 $("listaEnv").addEventListener("click", async e => {
+  const editar = e.target.closest("button[data-editar]");
+  if (editar) { abrirEdicao(enviadas.find(v => v.id === editar.dataset.editar)); return; }
   const b = e.target.closest("button[data-excluir]"); if (!b) return;
   const v = enviadas.find(x => x.id === b.dataset.excluir);
   if (!v || !confirm(`Excluir do Supabase a viagem da linha ${v.linha} de ${dataHora(v.inicio)}? Isso não pode ser desfeito.`)) return;
@@ -582,6 +585,40 @@ $("listaEnv").addEventListener("click", async e => {
   enviadas = enviadas.filter(x => x.id !== v.id); selecionadas.delete(v.id); delete series[v.id];
   renderEnviadas();
   if (!$("cmp").hidden) selecionadas.size ? comparar() : ($("cmp").hidden = true);
+});
+
+function abrirEdicao(v) {
+  if (!v) return;
+  $("editarViagem").dataset.id = v.id;
+  $("editarLinha").value = v.linha;
+  $("editarVeiculo").value = v.veiculo || "";
+  $("editarObs").value = v.obs || "";
+  msg($("msgEditarViagem"), "");
+  $("editarViagem").showModal();
+  $("editarLinha").focus();
+}
+$("btnCancelarEdicao").addEventListener("click", () => $("editarViagem").close());
+$("formEditarViagem").addEventListener("submit", async e => {
+  e.preventDefault();
+  const dialogo = $("editarViagem"), id = dialogo.dataset.id;
+  const codigo = codigoDaLinha($("editarLinha").value);
+  const aviso = $("msgEditarViagem"), salvar = $("btnSalvarEdicao");
+  if (!codigo) { msg(aviso, "Informe o código da linha.", "bad"); return; }
+  const conhecida = LINHAS.find(([cod]) => cod === codigo);
+  const alteracao = { linha: codigo, nome_linha: conhecida ? conhecida[1] : null,
+    veiculo: $("editarVeiculo").value.trim().toUpperCase() || null, obs: $("editarObs").value.trim() || null };
+  salvar.disabled = true; msg(aviso, "Salvando…");
+  try {
+    const { data, error } = await cliente().from("viagens").update(alteracao).eq("id", id)
+      .select("id,linha,nome_linha,veiculo,obs").single();
+    if (error) throw error;
+    const indice = enviadas.findIndex(v => v.id === id);
+    if (indice >= 0) Object.assign(enviadas[indice], data);
+    dialogo.close();
+    await carregarEnviadas();
+    if (!$("cmp").hidden && selecionadas.size) comparar();
+  } catch (erro) { msg(aviso, traduzErro(erro), "bad"); }
+  finally { salvar.disabled = false; }
 });
 
 // ---------- comparação ----------
