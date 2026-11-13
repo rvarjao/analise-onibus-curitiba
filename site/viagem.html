@@ -126,6 +126,8 @@
       <datalist id="listaLinhas"></datalist>
       <label for="veiculo">Código do veículo (se estiver visível no ônibus)</label>
       <input id="veiculo" placeholder="Ex.: BE602" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <label for="tipoOnibus">Tipo de ônibus</label>
+      <select id="tipoOnibus"><option value="">Não identificado</option><option value="comum">Comum</option><option value="articulado">Articulado</option><option value="biarticulado">Biarticulado</option></select>
       <label for="obs">Observação (opcional)</label>
       <input id="obs" placeholder="Ex.: sentido centro, chuva">
       <button id="btnIniciar" type="button">Iniciar viagem</button>
@@ -210,7 +212,7 @@
     </div>
   </section>
 </main><dialog id="revisao" style="width:min(94vw,480px);max-height:85vh;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><h2>Revisar pontos do GPS</h2><p class="aviso">Escolha um ponto para corrigir ou desconsiderar. A leitura original é preservada.</p><label for="pontoRev">Ponto (maiores velocidades primeiro)</label><select id="pontoRev"></select><p id="infoRev" class="aviso"></p><label for="valorRev">Velocidade corrigida (km/h)</label><input id="valorRev" type="number" min="0" max="120" step="0.1"><button id="salvarRev" type="button">Salvar correção</button><button id="excluirRev" class="sec" type="button">Desconsiderar ponto</button><button id="restaurarRev" class="sec" type="button">Restaurar leitura original</button><button id="fecharRev" class="sec" type="button">Fechar</button></dialog>
-<dialog id="editarViagem" style="width:min(94vw,480px);border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><form id="formEditarViagem"><h2>Editar viagem</h2><p class="aviso">Você pode corrigir os dados de identificação. O trajeto e as métricas gravadas não são alterados.</p><label for="editarLinha">Linha</label><input id="editarLinha" list="listaLinhas" required autocomplete="off" inputmode="search"><label for="editarVeiculo">Código do veículo</label><input id="editarVeiculo" autocapitalize="characters" autocomplete="off" spellcheck="false"><label for="editarObs">Observação</label><input id="editarObs" maxlength="500"><div class="msg" id="msgEditarViagem" role="status"></div><button id="btnSalvarEdicao" type="submit">Salvar alterações</button><button id="btnCancelarEdicao" class="sec" type="button">Cancelar</button></form></dialog>
+<dialog id="editarViagem" style="width:min(94vw,480px);border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:16px"><form id="formEditarViagem"><h2>Editar viagem</h2><p class="aviso">Você pode corrigir os dados de identificação. O trajeto e as métricas gravadas não são alterados.</p><label for="editarLinha">Linha</label><input id="editarLinha" list="listaLinhas" required autocomplete="off" inputmode="search"><label for="editarVeiculo">Código do veículo</label><input id="editarVeiculo" autocapitalize="characters" autocomplete="off" spellcheck="false"><label for="editarTipoOnibus">Tipo de ônibus</label><select id="editarTipoOnibus"><option value="">Não identificado</option><option value="comum">Comum</option><option value="articulado">Articulado</option><option value="biarticulado">Biarticulado</option></select><label for="editarObs">Observação</label><input id="editarObs" maxlength="500"><div class="msg" id="msgEditarViagem" role="status"></div><button id="btnSalvarEdicao" type="submit">Salvar alterações</button><button id="btnCancelarEdicao" class="sec" type="button">Cancelar</button></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -313,6 +315,10 @@ async function enviar(v) {
   const payload={...v, amostras:v.amostras.map((a,i)=>{const b=[...a];b[4]=leitura(v,i).valor;return b;}), amostras_originais:v.amostras};
   const { data, error } = await c.rpc("salvar_viagem", { p: payload });
   if (error) throw error;
+  if (v.tipo_onibus) {
+    const { error: erroTipo } = await c.from("viagens").update({ tipo_onibus: v.tipo_onibus }).eq("id", data);
+    if (erroTipo) throw erroTipo;
+  }
   removerPendente(v.id_local);
   return data;
 }
@@ -332,7 +338,7 @@ function iniciar() {
   if (!cod) { $("linha").focus(); return; }
   const conhecida = LINHAS.find(l => l[0] === cod);
   viagem = { versao: 1, id_local: novoId(), linha: cod, nome_linha: conhecida ? conhecida[1] : null,
-    veiculo: $("veiculo").value.trim().toUpperCase() || null, obs: $("obs").value.trim() || null,
+    veiculo: $("veiculo").value.trim().toUpperCase() || null, tipo_onibus: $("tipoOnibus").value || null, obs: $("obs").value.trim() || null,
     inicio_ms: Date.now(), fim_ms: null, fuso_min: new Date().getTimezoneOffset(),
     amostras_colunas: ["t_ms", "lat", "lon", "precisao_m", "vel_ms", "rumo"], amostras: [], marcas: [] };
   ultimo = null; vmax = 0; $("vel").textContent = "--"; $("velCalc").textContent = ""; $("marcas").textContent = ""; $("pontos").textContent = "0";
@@ -548,7 +554,7 @@ async function carregarEnviadas() {
   $("listaEnv").innerHTML = '<p class="vazio">Carregando…</p>';
   try {
     const { data, error } = await cliente().from("viagens")
-      .select("id,linha,nome_linha,veiculo,obs,inicio,fim,duracao_s,distancia_m,vel_media_kmh,vel_max_kmh,vel_p95_kmh,n_pontos,marcas")
+      .select("id,linha,nome_linha,veiculo,tipo_onibus,obs,inicio,fim,duracao_s,distancia_m,vel_media_kmh,vel_max_kmh,vel_p95_kmh,n_pontos,marcas")
       .order("inicio", { ascending: false });
     if (error) throw error;
     enviadas = data;
@@ -607,7 +613,7 @@ function renderEnviadas() {
       <div class="d">${dataHora(v.inicio)} · ${mmss(v.duracao_s)} · ${fmt(v.distancia_m / 1000, 1)} km</div>
       <div class="d">média ${fmt(v.vel_media_kmh)} · p95 ${fmt(v.vel_p95_kmh)} · máx. ${fmt(v.vel_max_kmh)} km/h</div>
       ${v.obs ? `<div class="d">${esc(v.obs)}</div>` : ""}${rotuloComparacaoUrbs(v.id)}
-      <div class="acoes"><button class="link" data-editar="${v.id}" type="button">Editar</button><button class="link" data-excluir="${v.id}" type="button">Excluir</button></div></div></div>`;
+      <div class="acoes"><a class="link" href="./navegacao.html?viagem=${encodeURIComponent(v.id)}">Navegar</a><button class="link" data-editar="${v.id}" type="button">Editar</button><button class="link" data-excluir="${v.id}" type="button">Excluir</button></div></div></div>`;
   }).join("") : `<p class="vazio">${enviadas.length ? "Nenhuma viagem nesta linha." : "Você ainda não enviou viagens."}</p>`;
   $("btnComparar").disabled = !selecionadas.size;
   $("btnComparar").textContent = selecionadas.size ? `Comparar (${selecionadas.size})` : "Comparar";
@@ -657,6 +663,7 @@ function abrirEdicao(v) {
   $("editarViagem").dataset.id = v.id;
   $("editarLinha").value = v.linha;
   $("editarVeiculo").value = v.veiculo || "";
+  $("editarTipoOnibus").value = v.tipo_onibus || "";
   $("editarObs").value = v.obs || "";
   msg($("msgEditarViagem"), "");
   $("editarViagem").showModal();
@@ -671,11 +678,11 @@ $("formEditarViagem").addEventListener("submit", async e => {
   if (!codigo) { msg(aviso, "Informe o código da linha.", "bad"); return; }
   const conhecida = LINHAS.find(([cod]) => cod === codigo);
   const alteracao = { linha: codigo, nome_linha: conhecida ? conhecida[1] : null,
-    veiculo: $("editarVeiculo").value.trim().toUpperCase() || null, obs: $("editarObs").value.trim() || null };
+    veiculo: $("editarVeiculo").value.trim().toUpperCase() || null, tipo_onibus: $("editarTipoOnibus").value || null, obs: $("editarObs").value.trim() || null };
   salvar.disabled = true; msg(aviso, "Salvando…");
   try {
     const { data, error } = await cliente().from("viagens").update(alteracao).eq("id", id)
-      .select("id,linha,nome_linha,veiculo,obs").single();
+      .select("id,linha,nome_linha,veiculo,tipo_onibus,obs").single();
     if (error) throw error;
     const indice = enviadas.findIndex(v => v.id === id);
     if (indice >= 0) Object.assign(enviadas[indice], data);
