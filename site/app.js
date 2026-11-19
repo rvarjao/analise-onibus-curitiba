@@ -5,7 +5,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const sum=(a,from=0)=>a.slice(from).reduce((x,y)=>x+y,0);
 async function carregar() {
   const config = window.APP_CONFIG;
-  if (!config?.supabaseUrl || config.supabaseUrl.includes("SEU-PROJETO")) throw new Error("O site ainda não foi configurado. Defina site/config.js com a URL e a chave publishable do Supabase.");
+  if (!config?.supabaseUrl || !/^https:\/\/[^/]+\.supabase\.co\/?$/.test(config.supabaseUrl)) throw new Error("URL do Supabase inválida em site/config.js. Configure a URL HTTPS do projeto.");
   const q=new URLSearchParams(location.search),inicio=q.get("inicio")||null,fim=q.get("fim")||null;
   const r=await fetch(`${config.supabaseUrl}/rest/v1/rpc/painel_dados`,{method:"POST",headers:{apikey:config.supabasePublishableKey,Authorization:`Bearer ${config.supabasePublishableKey}`,"Content-Type":"application/json"},body:JSON.stringify({p_inicio:inicio,p_fim:fim})});
   if(!r.ok) throw new Error(`Não foi possível carregar os dados (${r.status}).`); D=await r.json(); if(!D?.linhas?.length) throw new Error("Ainda não há dados publicados."); if(!D.dias?.length) throw new Error("Não há dados publicados para a data ou período selecionado."); iniciar(inicio,fim);

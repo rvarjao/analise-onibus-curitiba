@@ -27,9 +27,22 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          test -n "$SUPABASE_URL"
-          test -n "$SUPABASE_PUBLISHABLE_KEY"
-          printf 'window.APP_CONFIG = { supabaseUrl: "%s", supabasePublishableKey: "%s" };\n' "$SUPABASE_URL" "$SUPABASE_PUBLISHABLE_KEY" > site/config.js
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          url = os.environ["SUPABASE_URL"].strip().rstrip("/")
+          key = os.environ["SUPABASE_PUBLISHABLE_KEY"].strip()
+          parsed = urlparse(url)
+          if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.endswith(".supabase.co") or parsed.path or parsed.query or parsed.fragment:
+              raise SystemExit("SUPABASE_URL deve ser a URL HTTPS do projeto, como https://projeto.supabase.co")
+          if not key.startswith("sb_publishable_"):
+              raise SystemExit("SUPABASE_PUBLISHABLE_KEY deve ser uma chave publishable do Supabase")
+          config = {"supabaseUrl": url, "supabasePublishableKey": key}
+          Path("site/config.js").write_text("window.APP_CONFIG = " + json.dumps(config) + ";\n")
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
