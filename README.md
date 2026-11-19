@@ -63,7 +63,7 @@ A migration `0010_posicoes_navegacao.sql` adiciona as posições completas da UR
 
 ### 4. Publicar o frontend no GitHub Pages
 
-O conteúdo publicado está em `site/`: `index.html` (apresentação do projeto), `painel.html` (análises), `styles.css`, `app.js` e `viagem.html`. Ele busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos na página. A página inicial direciona para o painel e para o registro de uma viagem.
+O conteúdo publicado está em `site/`. Os HTMLs (`index.html`, `painel.html`, `viagem.html` e `navegacao.html`) ficam na raiz. `css/styles.css` atende à página inicial e ao painel; `css/viagem.css` e `css/navegacao.css` contêm os estilos das respectivas páginas. Os scripts ficam em `js/`, separados por página (`painel.js`, `viagem.js` e `navegacao.js`). O site busca os dados pelo RPC público do Supabase; não há dados da URBS embutidos nas páginas.
 
 Antes do primeiro deploy, crie no ambiente `github-pages` os **Actions secrets** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Ambas são valores públicos do frontend; a proteção vem das políticas RLS. O workflow `.github/workflows/pages.yml` gera `site/config.js` durante o deploy, sem versionar essa configuração.
 
