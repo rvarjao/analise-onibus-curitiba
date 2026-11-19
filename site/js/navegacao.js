@@ -31,10 +31,12 @@ function cliente() {
         { auth: { persistSession: true, storageKey: "viagem-auth" } },
     ));
 }
+
 function erro(t) {
     $("erro").textContent = t;
     $("erro").hidden = false;
 }
+
 function icone(tipo) {
     return L.divIcon({
         className: "bus",
@@ -48,6 +50,7 @@ function icone(tipo) {
         iconAnchor: [22, 18],
     });
 }
+
 function ponto(s) {
     if (s <= pts[0][0]) return pts[0];
     if (s >= pts.at(-1)[0]) return pts.at(-1);
@@ -68,6 +71,7 @@ function ponto(s) {
         a[3] + (b[3] - a[3]) * f,
     ];
 }
+
 function prepararSerie(pontos) {
     const serie = [];
     let anterior = null;
@@ -82,6 +86,7 @@ function prepararSerie(pontos) {
     }
     return serie;
 }
+
 function trechoSerie(serie) {
     const inicio = atual - JANELA_GRAFICO;
     let lo = 0,
@@ -103,6 +108,7 @@ function trechoSerie(serie) {
         .slice(primeiro, fim)
         .map((p) => ({ x: (p.t - atual) / 60, y: p.y }));
 }
+
 function atualizarGrafico() {
     seriesGrafico.forEach(
         (serie, i) => (chart.data.datasets[i].data = trechoSerie(serie)),
@@ -113,6 +119,7 @@ function atualizarGrafico() {
     ];
     chart.update("none");
 }
+
 function desenhar(frame) {
     const p = ponto(atual);
     if (!p) return;
@@ -141,6 +148,7 @@ function desenhar(frame) {
         ultimoGrafico = frame || 0;
     }
 }
+
 function acompanhar(ativo) {
     seguir = ativo;
     $("centralizar").setAttribute("aria-pressed", String(ativo));
@@ -149,6 +157,7 @@ function acompanhar(ativo) {
         ? "Acompanhamento automático ligado"
         : "Centralizar o ônibus e retomar o acompanhamento";
 }
+
 function configurarMapa() {
     acompanhar(true);
     map.on("dragstart zoomstart", () => acompanhar(false));
@@ -166,12 +175,14 @@ function configurarMapa() {
             acompanhar(false);
     });
 }
+
 function parar() {
     if (timer !== null) cancelAnimationFrame(timer);
     timer = null;
     ultimoFrame = null;
     $("play").textContent = "▶ Reproduzir";
 }
+
 function quadro(frame) {
     if (ultimoFrame !== null)
         atual = Math.min(
@@ -188,6 +199,7 @@ function quadro(frame) {
     }
     timer = requestAnimationFrame(quadro);
 }
+
 function tocar() {
     if (timer !== null) return;
     if (atual >= Number($("posicao").max)) {
@@ -198,6 +210,7 @@ function tocar() {
     timer = requestAnimationFrame(quadro);
     $("play").textContent = "❚❚ Pausar";
 }
+
 async function abrir(id) {
     parar();
     const { data: v, error: e } = await cliente()
@@ -312,6 +325,7 @@ async function abrir(id) {
     });
     desenhar();
 }
+
 async function abrirUrbs(q) {
     const { data, error } = await cliente().rpc("navegacao_urbs", {
         p_dia: q.get("urbs_dia"),
@@ -413,6 +427,7 @@ async function abrirUrbs(q) {
     });
     desenhar();
 }
+
 async function iniciar() {
     try {
         const q = new URLSearchParams(location.search);

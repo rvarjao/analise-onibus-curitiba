@@ -403,6 +403,7 @@ function lerJSON(k, padrao) {
         return padrao;
     }
 }
+
 function gravarJSON(k, v) {
     try {
         localStorage.setItem(k, JSON.stringify(v));
@@ -411,9 +412,11 @@ function gravarJSON(k, v) {
         return false;
     }
 }
+
 function salvarLocal() {
     if (viagem) gravarJSON(CHAVE, viagem);
 }
+
 function limparLocal() {
     try {
         localStorage.removeItem(CHAVE);
@@ -428,17 +431,20 @@ function guardarPendente(v) {
             .concat([v]),
     );
 }
+
 function removerPendente(id) {
     gravarJSON(
         CHAVE_PEND,
         pendentes().filter((x) => x.id_local !== id),
     );
 }
+
 function status(txt, cls) {
     const s = $("status");
     s.textContent = txt;
     s.className = "status " + (cls || "");
 }
+
 function msg(el, txt, cls) {
     el.textContent = txt;
     el.className = "msg " + (cls || "");
@@ -491,6 +497,7 @@ function cliente() {
     });
     return sb;
 }
+
 function traduzErro(e) {
     const m = (e && e.message) || String(e);
     if (/Invalid login credentials/i.test(m))
@@ -503,11 +510,13 @@ function traduzErro(e) {
         return "Sua sessão expirou. Saia e entre novamente.";
     return m;
 }
+
 function entrou(session) {
     usuario = session.user;
     $("quem").textContent = usuario.email || "";
     tela("prep");
 }
+
 async function iniciarApp() {
     migrarDadosAntigos();
     const c = cliente();
@@ -719,6 +728,7 @@ function leitura(v, i) {
               : raw,
     };
 }
+
 function recalcularMax() {
     vmax = 0;
     viagem.amostras.forEach((a, i) => {
@@ -726,6 +736,7 @@ function recalcularMax() {
         if (x != null) vmax = Math.max(vmax, x * 3.6);
     });
 }
+
 function abrirRevisao(maxima = false) {
     if (!viagem?.amostras.length) return;
     const ids = viagem.amostras
@@ -764,6 +775,7 @@ function abrirRevisao(maxima = false) {
     mostrarPonto();
     if (!$("revisao").open) $("revisao").showModal();
 }
+
 function mostrarPonto() {
     const i = Number($("pontoRev").value),
         x = leitura(viagem, i),
@@ -776,6 +788,7 @@ function mostrarPonto() {
         (viagem.revisoes?.[i] ? " Revisão manual aplicada." : "");
     $("valorRev").value = x.valor == null ? "" : (x.valor * 3.6).toFixed(1);
 }
+
 function aplicarRevisao(tipo) {
     const i = Number($("pontoRev").value);
     viagem.revisoes ??= {};
@@ -849,6 +862,7 @@ function aoPosicao(p) {
         a <= 20 ? "ok" : a <= 50 ? "warn" : "bad",
     );
 }
+
 function aoErro(e) {
     if (e.code === 1)
         status(
@@ -859,6 +873,7 @@ function aoErro(e) {
         status("Posição indisponível. Procure céu aberto/janela.", "warn");
     else status("Sem sinal de GPS há um tempo…", "warn");
 }
+
 function atualizarUI() {
     if (!viagem) return;
     $("tempo").textContent = mmss((Date.now() - viagem.inicio_ms) / 1000);
@@ -880,6 +895,7 @@ function atualizarUI() {
     }
     $("vmax").textContent = vmax ? fmt(vmax) + " km/h" : "--";
 }
+
 function marcar() {
     if (!viagem) return;
     viagem.marcas.push({
@@ -895,6 +911,7 @@ function marcar() {
     if (navigator.vibrate) navigator.vibrate(60);
     salvarLocal();
 }
+
 function parar() {
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     watchId = null;
@@ -951,6 +968,7 @@ function resumoLocal(v) {
         comVel: vs.length,
     };
 }
+
 function mostrarResumo() {
     const r = resumoLocal(viagem),
         A = viagem.amostras;
@@ -991,6 +1009,7 @@ function mostrarResumo() {
     msg($("msgEnvio"), "");
     tela("fim");
 }
+
 function nomeArquivo(v) {
     const d = new Date(v.inicio_ms),
         z = (n) => String(n).padStart(2, "0");
@@ -1007,11 +1026,13 @@ function nomeArquivo(v) {
         ".json"
     );
 }
+
 function arquivo(v) {
     return new File([JSON.stringify(v)], nomeArquivo(v), {
         type: "application/json",
     });
 }
+
 function baixar(v) {
     const f = arquivo(v),
         url = URL.createObjectURL(f),
@@ -1023,6 +1044,7 @@ function baixar(v) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
 async function compartilhar() {
     try {
         await navigator.share({
@@ -1031,6 +1053,7 @@ async function compartilhar() {
         });
     } catch (e) {}
 }
+
 async function enviarAtual() {
     $("btnEnviar").disabled = true;
     msg($("msgEnvio"), "Enviando…");
@@ -1071,6 +1094,7 @@ function migrarDadosAntigos() {
         gravarJSON(CHAVE, a);
     }
 }
+
 function verificarEmAndamento() {
     const pend = watchId === null ? lerJSON(CHAVE, null) : null;
     $("recuperar").hidden = !(pend && pend.amostras && usuario);
@@ -1106,6 +1130,7 @@ async function abrirLista() {
     if (!enviadas.length) await carregarEnviadas();
     else renderEnviadas();
 }
+
 function renderPendentes() {
     const l = pendentes().sort((a, b) => b.inicio_ms - a.inicio_ms);
     $("boxPend").hidden = !l.length;
@@ -1121,6 +1146,7 @@ function renderPendentes() {
         })
         .join("");
 }
+
 async function enviarPendentes(lista) {
     const el = $("msgPend");
     let ok = 0,
@@ -1203,6 +1229,7 @@ async function carregarEnviadas() {
             `<p class="msg bad">${esc(traduzErro(e))}</p>`;
     }
 }
+
 async function carregarComparacoesUrbs() {
     if (!enviadas.length) {
         comparacoesUrbs = {};
@@ -1225,6 +1252,7 @@ async function carregarComparacoesUrbs() {
         (data || []).map((c) => [c.viagem_id, c]),
     );
 }
+
 function rotuloComparacaoUrbs(id) {
     const c = comparacoesUrbs[id];
     if (!c) return "";
@@ -1237,6 +1265,7 @@ function rotuloComparacaoUrbs(id) {
     };
     return `<div class="d">${esc(textos[c.status] || "Comparação URBS: status desconhecido.")}</div>`;
 }
+
 function mostrarComparacaoUrbs(id) {
     const c = comparacoesUrbs[id];
     $("cmpUrbs").hidden = !c;
@@ -1303,6 +1332,7 @@ function mostrarComparacaoUrbs(id) {
         },
     });
 }
+
 function renderEnviadas() {
     const f = $("filtroLinha").value,
         l = enviadas.filter((v) => !f || v.linha === f);
@@ -1469,6 +1499,7 @@ async function comparar() {
     mapaComparacao(vs);
     $("cmp").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
 function tabelaComparacao(vs) {
     const linhas = [
         [
@@ -1549,6 +1580,7 @@ function curva(pts) {
             y: +(s / n).toFixed(1),
         }));
 }
+
 function graficoComparacao(vs) {
     if (typeof Chart === "undefined") return;
     $("dicaEixo").textContent =
@@ -1612,6 +1644,7 @@ function graficoComparacao(vs) {
         },
     });
 }
+
 function mapaComparacao(vs) {
     if (typeof L === "undefined") return;
     if (!mapa) {

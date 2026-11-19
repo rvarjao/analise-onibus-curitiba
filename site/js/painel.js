@@ -46,6 +46,7 @@ async function carregar() {
         );
     iniciar(inicio, fim);
 }
+
 function iniciar(inicio, fim) {
     const state = (window.state = {
             limite: 50,
