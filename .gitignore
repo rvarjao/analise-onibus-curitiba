@@ -18,3 +18,4 @@ dados/
 comparacao_*.csv
 # Configuração local do frontend; config.example.js é o modelo versionado.
 site/config.js
+/supabase/.temp
